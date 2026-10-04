@@ -1,9 +1,7 @@
-from typing import TypedDict
+from typing import Annotated, TypedDict
+
+from langgraph.graph.message import add_messages
 
 
 class AgentState(TypedDict):
-    user_request: str
-    action: str | None
-    target: str | None
-    result: str | None
-    error: str | None
+    messages: Annotated[list, add_messages]

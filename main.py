@@ -1,23 +1,18 @@
+from langchain_core.messages import HumanMessage
+
 from app.agent.graph import graph
 
 
 def main():
     user_request = input("Command: ")
 
-    initial_state = {
-        "user_request": user_request,
-        "action": None,
-        "target": None,
-        "result": None,
-        "error": None,
-    }
+    initial_state = {"messages": [HumanMessage(content=user_request)]}
 
     final_state = graph.invoke(initial_state)
 
-    if final_state.get("error"):
-        print(f"Error: {final_state['error']}")
-    else:
-        print(final_state["result"])
+    final_message = final_state["messages"][-1]
+
+    print(final_message.content)
 
 
 if __name__ == "__main__":

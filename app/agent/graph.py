@@ -1,89 +1,62 @@
-from langgraph.graph import StateGraph, START, END
 from langchain_ollama import ChatOllama
 
+from langgraph.graph import StateGraph, START, END
+from langgraph.prebuilt import ToolNode
+
 from app.agent.state import AgentState
-from app.agent.models import CommandIntent
 from app.tools.macos import open_application
+
+
+tools = [
+    open_application,
+]
 
 
 llm = ChatOllama(
     model="qwen3:8b",
     temperature=0,
-    think=False,
 )
 
-command_model = llm.with_structured_output(CommandIntent)
+llm_with_tools = llm.bind_tools(tools)
 
 
-def understand_command(state: AgentState) -> dict:
-    """Use the local LLM to understand the user's command."""
+def agent_node(state: AgentState) -> dict:
+    """Let the LLM decide what to do next."""
 
-    try:
-        intent = command_model.invoke(
-            f"""
-You are the command interpreter for a macOS AI agent.
+    response = llm_with_tools.invoke(state["messages"])
 
-Currently the agent supports only one action:
-
-open_application
-- Opens a macOS application.
-- target must contain the application name.
-
-Examples:
-
-User: Open Finder
-action: open_application
-target: Finder
-
-User: Launch Cursor
-action: open_application
-target: Cursor
-
-User: Start Safari
-action: open_application
-target: Safari
-
-User request:
-{state["user_request"]}
-"""
-        )
-
-        return {
-            "action": intent.action,
-            "target": intent.target,
-        }
-
-    except Exception as exc:
-        return {"error": f"Could not understand command: {exc}"}
+    return {"messages": [response]}
 
 
-def execute_action(state: AgentState) -> dict:
-    """Execute the action selected by the agent."""
+def should_continue(state: AgentState) -> str:
+    """Determine whether the LLM requested a tool."""
 
-    if state.get("error"):
-        return {}
+    last_message = state["messages"][-1]
 
-    try:
-        if state["action"] == "open_application":
-            result = open_application(state["target"])
+    if last_message.tool_calls:
+        return "tools"
 
-            return {"result": result}
-
-        return {"error": f"Unsupported action: {state['action']}"}
-
-    except Exception as exc:
-        return {"error": str(exc)}
+    return "end"
 
 
 def build_graph():
     builder = StateGraph(AgentState)
 
-    builder.add_node("understand_command", understand_command)
-    builder.add_node("execute_action", execute_action)
+    builder.add_node("agent", agent_node)
+    builder.add_node("tools", ToolNode(tools))
 
-    builder.add_edge(START, "understand_command")
-    builder.add_edge("understand_command", "execute_action")
-    builder.add_edge("execute_action", END)
+    builder.add_edge(START, "agent")
+
+    builder.add_conditional_edges(
+        "agent",
+        should_continue,
+        {
+            "tools": "tools",
+            "end": END,
+        },
+    )
+
+    builder.add_edge("tools", "agent")
 
     return builder.compile()
 
