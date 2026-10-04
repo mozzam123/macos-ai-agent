@@ -14,6 +14,10 @@ from app.tools.macos import (
     create_folder,
     find_file,
     open_file,
+    copy_file,
+    move_file,
+    rename_file,
+    create_file,
 )
 
 
@@ -25,6 +29,10 @@ tools = [
     create_folder,
     find_file,
     open_file,
+    copy_file,
+    move_file,
+    rename_file,
+    create_file,
 ]
 
 

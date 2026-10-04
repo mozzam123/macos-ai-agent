@@ -1,7 +1,7 @@
 import subprocess
 import webbrowser
 from pathlib import Path
-
+import shutil
 from langchain_core.tools import tool
 
 
@@ -216,3 +216,99 @@ def open_file(file_path: str) -> str:
     )
 
     return f"Opened file: {path}"
+
+
+@tool
+def copy_file(source: str, destination: str) -> str:
+    """Copy an existing file to another directory or file path.
+
+    Use this when the user asks to copy or duplicate a file.
+    """
+
+    source_path = Path(source.strip()).expanduser()
+    destination_path = Path(destination.strip()).expanduser()
+
+    if not source_path.is_file():
+        raise FileNotFoundError(f"Source file does not exist: {source_path}")
+
+    if destination_path.is_dir():
+        destination_path = destination_path / source_path.name
+
+    if destination_path.exists():
+        raise FileExistsError(f"Destination already exists: {destination_path}")
+
+    destination_path.parent.mkdir(parents=True, exist_ok=True)
+
+    shutil.copy2(source_path, destination_path)
+
+    return f"Copied file to: {destination_path}"
+
+
+@tool
+def move_file(source: str, destination: str) -> str:
+    """Move an existing file to another directory or file path.
+
+    Use this when the user asks to move a file.
+    """
+
+    source_path = Path(source.strip()).expanduser()
+    destination_path = Path(destination.strip()).expanduser()
+
+    if not source_path.is_file():
+        raise FileNotFoundError(f"Source file does not exist: {source_path}")
+
+    if destination_path.is_dir():
+        destination_path = destination_path / source_path.name
+
+    if destination_path.exists():
+        raise FileExistsError(f"Destination already exists: {destination_path}")
+
+    destination_path.parent.mkdir(parents=True, exist_ok=True)
+
+    shutil.move(str(source_path), str(destination_path))
+
+    return f"Moved file to: {destination_path}"
+
+
+@tool
+def rename_file(file_path: str, new_name: str) -> str:
+    """Rename an existing file while keeping it in the same directory."""
+
+    path = Path(file_path.strip()).expanduser()
+
+    if not path.is_file():
+        raise FileNotFoundError(f"File does not exist: {path}")
+
+    if not new_name or not new_name.strip():
+        raise ValueError("New file name cannot be empty.")
+
+    new_path = path.with_name(new_name.strip())
+
+    if new_path.exists():
+        raise FileExistsError(f"A file already exists with that name: {new_path}")
+
+    path.rename(new_path)
+
+    return f"Renamed file to: {new_path}"
+
+
+@tool
+def create_file(file_path: str, content: str = "") -> str:
+    """Create a new text file with optional content.
+
+    Use this when the user asks to create a file.
+    """
+
+    path = Path(file_path.strip()).expanduser()
+
+    if path.exists():
+        raise FileExistsError(f"File already exists: {path}")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    path.write_text(
+        content,
+        encoding="utf-8",
+    )
+
+    return f"Created file: {path}"
