@@ -111,3 +111,108 @@ def get_running_applications() -> str:
         error = exc.stderr.strip() or "Unknown AppleScript error."
 
         raise RuntimeError(f"Could not get running applications: {error}") from exc
+
+
+@tool
+def create_folder(folder_path: str) -> str:
+    """Create a new folder on the Mac.
+
+    Use this when the user asks to create or make a folder/directory.
+    The path may use ~ to represent the user's home directory.
+    """
+
+    if not folder_path or not folder_path.strip():
+        raise ValueError("Folder path cannot be empty.")
+
+    path = Path(folder_path.strip()).expanduser()
+
+    if path.exists():
+        if path.is_dir():
+            return f"Folder already exists: {path}"
+
+        raise FileExistsError(f"A file already exists at: {path}")
+
+    path.mkdir(
+        parents=True,
+        exist_ok=False,
+    )
+
+    return f"Created folder: {path}"
+
+
+@tool
+def find_file(
+    directory: str,
+    extension: str | None = None,
+    latest: bool = False,
+) -> str:
+    """Find a file inside a directory.
+
+    Use this when the user asks to find or locate a file.
+
+    Args:
+        directory: Directory to search, such as ~/Downloads.
+        extension: Optional file extension such as pdf, txt, or md.
+        latest: If true, return the most recently modified matching file.
+    """
+
+    if not directory or not directory.strip():
+        raise ValueError("Directory cannot be empty.")
+
+    path = Path(directory.strip()).expanduser()
+
+    if not path.exists():
+        raise FileNotFoundError(f"Directory does not exist: {path}")
+
+    if not path.is_dir():
+        raise ValueError(f"Path is not a directory: {path}")
+
+    files = [file for file in path.iterdir() if file.is_file()]
+
+    if extension:
+        normalized_extension = extension.lower().lstrip(".")
+
+        files = [
+            file for file in files if file.suffix.lower() == f".{normalized_extension}"
+        ]
+
+    if not files:
+        return "No matching files found."
+
+    if latest:
+        file = max(
+            files,
+            key=lambda item: item.stat().st_mtime,
+        )
+
+        return str(file)
+
+    return "\n".join(str(file) for file in files)
+
+
+@tool
+def open_file(file_path: str) -> str:
+    """Open an existing file using its default macOS application.
+
+    Use this when the user asks to open a specific file.
+    """
+
+    if not file_path or not file_path.strip():
+        raise ValueError("File path cannot be empty.")
+
+    path = Path(file_path.strip()).expanduser()
+
+    if not path.exists():
+        raise FileNotFoundError(f"File does not exist: {path}")
+
+    if not path.is_file():
+        raise ValueError(f"Path is not a file: {path}")
+
+    subprocess.run(
+        ["open", str(path)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    return f"Opened file: {path}"
