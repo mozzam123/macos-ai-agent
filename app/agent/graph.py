@@ -4,11 +4,19 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
 
 from app.agent.state import AgentState
-from app.tools.macos import open_application
+from app.tools.macos import (
+    open_application,
+    open_folder,
+    open_url,
+    get_running_applications,
+)
 
 
 tools = [
     open_application,
+    open_folder,
+    open_url,
+    get_running_applications,
 ]
 
 
@@ -21,16 +29,12 @@ llm_with_tools = llm.bind_tools(tools)
 
 
 def agent_node(state: AgentState) -> dict:
-    """Let the LLM decide what to do next."""
-
     response = llm_with_tools.invoke(state["messages"])
 
     return {"messages": [response]}
 
 
 def should_continue(state: AgentState) -> str:
-    """Determine whether the LLM requested a tool."""
-
     last_message = state["messages"][-1]
 
     if last_message.tool_calls:
