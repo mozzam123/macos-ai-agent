@@ -13,11 +13,14 @@ from app.tools.macos import (
     get_running_applications,
     create_folder,
     find_file,
+    find_directory,
     open_file,
     copy_file,
     move_file,
     rename_file,
     create_file,
+    open_in_cursor,
+    initialize_git,
 )
 
 
@@ -28,11 +31,14 @@ tools = [
     get_running_applications,
     create_folder,
     find_file,
+    find_directory,
     open_file,
     copy_file,
     move_file,
     rename_file,
     create_file,
+    open_in_cursor,
+    initialize_git,
 ]
 
 

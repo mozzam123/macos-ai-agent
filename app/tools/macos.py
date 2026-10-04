@@ -312,3 +312,118 @@ def create_file(file_path: str, content: str = "") -> str:
     )
 
     return f"Created file: {path}"
+
+
+@tool
+def open_in_cursor(path: str) -> str:
+    """Open a file or folder in Cursor.
+
+    Use this when the user specifically asks to open a project,
+    folder, or file in Cursor.
+    """
+
+    target = Path(path.strip()).expanduser()
+
+    if not target.exists():
+        raise FileNotFoundError(f"Path does not exist: {target}")
+
+    try:
+        subprocess.run(
+            ["open", "-a", "Cursor", str(target)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        return f"Opened in Cursor: {target}"
+
+    except subprocess.CalledProcessError as exc:
+        error = exc.stderr.strip() or "Unknown macOS error."
+
+        raise RuntimeError(f"Could not open '{target}' in Cursor: {error}") from exc
+
+
+@tool
+def initialize_git(directory: str) -> str:
+    """Initialize a local Git repository inside an existing directory.
+
+    Use this when the user asks to initialize Git or create a Git
+    repository inside a folder.
+    """
+
+    path = Path(directory.strip()).expanduser()
+
+    if not path.exists():
+        raise FileNotFoundError(f"Directory does not exist: {path}")
+
+    if not path.is_dir():
+        raise ValueError(f"Path is not a directory: {path}")
+
+    git_directory = path / ".git"
+
+    if git_directory.exists():
+        return f"Git is already initialized in: {path}"
+
+    try:
+        subprocess.run(
+            ["git", "init", str(path)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        return f"Initialized Git repository in: {path}"
+
+    except subprocess.CalledProcessError as exc:
+        error = exc.stderr.strip() or "Unknown Git error."
+
+        raise RuntimeError(f"Could not initialize Git in '{path}': {error}") from exc
+
+
+@tool
+def find_directory(
+    name: str,
+    search_directory: str = "~",
+) -> str:
+    """Find a directory by name inside another directory.
+
+    Use this when the user refers to a folder by name but its exact
+    filesystem path is unknown.
+
+    The search is case-insensitive and treats spaces, hyphens, and
+    underscores as similar.
+
+    Args:
+        name: Folder name to search for.
+        search_directory: Directory where the search should begin.
+    """
+
+    if not name or not name.strip():
+        raise ValueError("Directory name cannot be empty.")
+
+    root = Path(search_directory.strip()).expanduser()
+
+    if not root.is_dir():
+        raise FileNotFoundError(f"Search directory does not exist: {root}")
+
+    def normalize(value: str) -> str:
+        return value.lower().replace("-", "").replace("_", "").replace(" ", "")
+
+    target = normalize(name)
+
+    matches = []
+
+    for path in root.rglob("*"):
+        if not path.is_dir():
+            continue
+
+        if normalize(path.name) == target:
+            matches.append(path)
+
+    if not matches:
+        return f"No directory named '{name}' found inside {root}."
+
+    if len(matches) == 1:
+        return str(matches[0])
+
+    return "\n".join(str(path) for path in matches[:10])
