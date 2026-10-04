@@ -1,2 +1,8 @@
 langgraph
 langchain-ollama
+faster-whisper
+sounddevice
+numpy
+scipy
+av<19
+pynput

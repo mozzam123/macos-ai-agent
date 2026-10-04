@@ -2,6 +2,7 @@ from langchain_ollama import ChatOllama
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
+from app.config import OLLAMA_MODEL
 
 from app.agent.state import AgentState
 from app.tools.macos import (
@@ -21,7 +22,7 @@ tools = [
 
 
 llm = ChatOllama(
-    model="qwen3:8b",
+    model=OLLAMA_MODEL,
     temperature=0,
 )
 

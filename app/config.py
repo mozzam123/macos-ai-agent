@@ -1,0 +1,7 @@
+WHISPER_MODEL = "small"
+OLLAMA_MODEL = "qwen3:8b"
+
+RECORDING_DURATION = 5
+SAMPLE_RATE = 16000
+
+HOTKEY = "<ctrl>+<alt>+<space>"
