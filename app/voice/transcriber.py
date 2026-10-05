@@ -1,24 +1,21 @@
-from pathlib import Path
-
-from faster_whisper import WhisperModel
+from groq import Groq
 
 from app.config import WHISPER_MODEL
 
-model = WhisperModel(
-    WHISPER_MODEL,
-    device="cpu",
-    compute_type="int8",
-)
+
+client = Groq()
 
 
-def transcribe_audio(audio_path: Path) -> str:
-    """Transcribe an audio file locally using faster-whisper."""
+def transcribe_audio(audio_path: str) -> str:
+    """Transcribe an audio file using Groq Whisper."""
 
-    segments, _ = model.transcribe(
-        str(audio_path),
-        beam_size=5,
-    )
+    with open(audio_path, "rb") as audio_file:
+        transcription = client.audio.transcriptions.create(
+            file=audio_file,
+            model=WHISPER_MODEL,
+            response_format="json",
+            language="en",
+            temperature=0.0,
+        )
 
-    text = " ".join(segment.text.strip() for segment in segments)
-
-    return text.strip()
+    return transcription.text.strip()

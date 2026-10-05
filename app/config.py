@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-WHISPER_MODEL = "small"
+WHISPER_MODEL = "whisper-large-v3"
 OLLAMA_MODEL = "qwen3:8b"
 
 RECORDING_DURATION = 10
