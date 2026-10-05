@@ -30,6 +30,10 @@ Previous successful tool results:
 
 {tool_results}
 
+Current error:
+
+{error}
+
 IMPORTANT EXECUTION RULES:
 
 - Execute only ONE tool call at a time.
@@ -41,6 +45,9 @@ IMPORTANT EXECUTION RULES:
 - Use exact paths returned by tools.
 - Do not repeat actions that already succeeded.
 - Do not claim success unless the tool succeeded.
+- If a tool fails, inspect the error before deciding what to do next.
+- Do not blindly repeat the same failed tool call.
+- Recover using another appropriate tool when possible.
 
 If all required actions are complete, return the final response
 without calling another tool.

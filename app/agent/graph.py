@@ -1,7 +1,5 @@
 from pydantic import BaseModel, Field
-
-from langchain_ollama import ChatOllama
-from app.config import OLLAMA_MODEL
+from langchain_core.messages import ToolMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
 from langchain_groq import ChatGroq
@@ -110,6 +108,7 @@ def agent_node(state: AgentState) -> dict:
     plan = state.get("plan", [])
     current_step = state.get("current_step", 0)
     tool_results = state.get("tool_results", [])
+    error = state.get("error")
 
     plan_text = "\n".join(f"{index + 1}. {step}" for index, step in enumerate(plan))
 
@@ -119,6 +118,7 @@ def agent_node(state: AgentState) -> dict:
         plan=plan_text,
         current_step=current_step + 1,
         tool_results=results_text or "None",
+        error=error or "None",
     )
 
     response = llm_with_tools.invoke(
@@ -132,11 +132,16 @@ def agent_node(state: AgentState) -> dict:
 
 
 def track_tool_result(state: AgentState) -> dict:
-    """Store the latest successful tool result."""
+    """Track successful tool results and tool errors."""
 
     last_message = state["messages"][-1]
-
     result = str(last_message.content)
+
+    # ToolNode marks handled failures with error status
+    if isinstance(last_message, ToolMessage) and last_message.status == "error":
+        return {
+            "error": result,
+        }
 
     tool_results = [
         *state.get("tool_results", []),
@@ -146,6 +151,7 @@ def track_tool_result(state: AgentState) -> dict:
     return {
         "tool_results": tool_results,
         "current_step": state.get("current_step", 0) + 1,
+        "error": None,
     }
 
 
@@ -163,6 +169,17 @@ def should_continue(state: AgentState) -> str:
         return "tools"
 
     return "end"
+
+
+def handle_tool_error(error: Exception) -> str:
+    """Convert tool exceptions into information the agent can reason about."""
+
+    return (
+        "Tool execution failed.\n"
+        f"Error: {str(error)}\n"
+        "Review the error and decide the next appropriate action. "
+        "Do not repeat the same failing action without changing something."
+    )
 
 
 # ---------------------------------------------------------
@@ -185,7 +202,10 @@ def build_graph():
 
     builder.add_node(
         "tools",
-        ToolNode(tools),
+        ToolNode(
+            tools,
+            handle_tool_errors=handle_tool_error,
+        ),
     )
 
     builder.add_node(
