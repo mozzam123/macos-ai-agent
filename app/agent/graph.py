@@ -5,6 +5,7 @@ from langgraph.prebuilt import ToolNode
 from langchain_groq import ChatGroq
 from app.config import GROQ_MODEL
 from app.agent.prompts import AGENT_PROMPT, PLANNER_PROMPT
+from app.safety.policy import RiskLevel, get_tool_risk
 
 from app.agent.state import AgentState
 from app.tools.macos import (
@@ -135,6 +136,35 @@ def agent_node(state: AgentState) -> dict:
     return {"messages": [response]}
 
 
+def safety_node(state: AgentState) -> dict:
+    """Inspect the requested tool and determine its risk level."""
+
+    last_message = state["messages"][-1]
+
+    if not last_message.tool_calls:
+        return {
+            "pending_tool": None,
+            "pending_tool_args": None,
+            "risk_level": None,
+        }
+
+    # We intentionally allow only one tool call per agent turn.
+    tool_call = last_message.tool_calls[0]
+
+    tool_name = tool_call["name"]
+    tool_args = tool_call["args"]
+
+    risk = get_tool_risk(tool_name)
+
+    print(f"Safety check: {tool_name} " f"→ risk={risk.value}")
+
+    return {
+        "pending_tool": tool_name,
+        "pending_tool_args": tool_args,
+        "risk_level": risk.value,
+    }
+
+
 def track_tool_result(state: AgentState) -> dict:
     """Track successful tool results and tool errors."""
 
@@ -165,14 +195,25 @@ def track_tool_result(state: AgentState) -> dict:
 
 
 def should_continue(state: AgentState) -> str:
-    """Route to tools when the agent requests a tool."""
+    """Determine whether the agent wants to execute a tool."""
 
     last_message = state["messages"][-1]
 
     if last_message.tool_calls:
-        return "tools"
+        return "safety"
 
     return "end"
+
+
+def route_after_safety(state: AgentState) -> str:
+    """Route based on the requested tool's risk level."""
+
+    risk = state.get("risk_level")
+
+    if risk == RiskLevel.HIGH.value:
+        return "high_risk"
+
+    return "execute"
 
 
 def handle_tool_error(error: Exception) -> str:
@@ -194,6 +235,10 @@ def handle_tool_error(error: Exception) -> str:
 def build_graph():
     builder = StateGraph(AgentState)
 
+    # -----------------------------------------------------
+    # Nodes
+    # -----------------------------------------------------
+
     builder.add_node(
         "planner",
         planner_node,
@@ -202,6 +247,11 @@ def build_graph():
     builder.add_node(
         "agent",
         agent_node,
+    )
+
+    builder.add_node(
+        "safety",
+        safety_node,
     )
 
     builder.add_node(
@@ -217,6 +267,10 @@ def build_graph():
         track_tool_result,
     )
 
+    # -----------------------------------------------------
+    # Start
+    # -----------------------------------------------------
+
     builder.add_edge(
         START,
         "planner",
@@ -227,14 +281,38 @@ def build_graph():
         "agent",
     )
 
+    # -----------------------------------------------------
+    # Agent routing
+    # -----------------------------------------------------
+
     builder.add_conditional_edges(
         "agent",
         should_continue,
         {
-            "tools": "tools",
+            "safety": "safety",
             "end": END,
         },
     )
+
+    # -----------------------------------------------------
+    # Safety routing
+    # -----------------------------------------------------
+
+    builder.add_conditional_edges(
+        "safety",
+        route_after_safety,
+        {
+            "execute": "tools",
+            # Temporary:
+            # High-risk tools still execute.
+            # HITL will replace this route next.
+            "high_risk": "tools",
+        },
+    )
+
+    # -----------------------------------------------------
+    # Tool result
+    # -----------------------------------------------------
 
     builder.add_edge(
         "tools",
