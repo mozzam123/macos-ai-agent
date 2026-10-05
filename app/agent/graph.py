@@ -6,6 +6,8 @@ from langchain_groq import ChatGroq
 from app.config import GROQ_MODEL
 from app.agent.prompts import AGENT_PROMPT, PLANNER_PROMPT
 from app.safety.policy import RiskLevel, get_tool_risk
+from langgraph.types import interrupt
+from langgraph.checkpoint.memory import InMemorySaver
 
 from app.agent.state import AgentState
 from app.tools.macos import (
@@ -99,6 +101,7 @@ def planner_node(state: AgentState) -> dict:
         "pending_tool": None,
         "pending_tool_args": None,
         "risk_level": None,
+        "approved": None,
     }
 
 
@@ -165,6 +168,44 @@ def safety_node(state: AgentState) -> dict:
     }
 
 
+def approval_node(state: AgentState) -> dict:
+    """Pause execution and request approval for a high-risk action."""
+
+    tool_name = state.get("pending_tool")
+    tool_args = state.get("pending_tool_args")
+    risk_level = state.get("risk_level")
+
+    decision = interrupt(
+        {
+            "type": "tool_approval",
+            "tool": tool_name,
+            "arguments": tool_args,
+            "risk": risk_level,
+            "message": f"Approval required to execute '{tool_name}'.",
+        }
+    )
+
+    approved = bool(decision.get("approved", False))
+
+    return {
+        "approved": approved,
+    }
+
+
+def rejection_node(state: AgentState) -> dict:
+    """Record that the user rejected the action."""
+
+    tool_name = state.get("pending_tool")
+
+    return {
+        "error": f"User rejected tool execution: {tool_name}",
+        "pending_tool": None,
+        "pending_tool_args": None,
+        "risk_level": None,
+        "approved": None,
+    }
+
+
 def track_tool_result(state: AgentState) -> dict:
     """Track successful tool results and tool errors."""
 
@@ -227,6 +268,15 @@ def handle_tool_error(error: Exception) -> str:
     )
 
 
+def route_after_approval(state: AgentState) -> str:
+    """Execute or reject the pending action."""
+
+    if state.get("approved"):
+        return "execute"
+
+    return "reject"
+
+
 # ---------------------------------------------------------
 # Graph
 # ---------------------------------------------------------
@@ -252,6 +302,16 @@ def build_graph():
     builder.add_node(
         "safety",
         safety_node,
+    )
+
+    builder.add_node(
+        "approval",
+        approval_node,
+    )
+
+    builder.add_node(
+        "rejection",
+        rejection_node,
     )
 
     builder.add_node(
@@ -282,7 +342,7 @@ def build_graph():
     )
 
     # -----------------------------------------------------
-    # Agent routing
+    # Agent → Safety
     # -----------------------------------------------------
 
     builder.add_conditional_edges(
@@ -295,7 +355,7 @@ def build_graph():
     )
 
     # -----------------------------------------------------
-    # Safety routing
+    # Safety
     # -----------------------------------------------------
 
     builder.add_conditional_edges(
@@ -303,15 +363,30 @@ def build_graph():
         route_after_safety,
         {
             "execute": "tools",
-            # Temporary:
-            # High-risk tools still execute.
-            # HITL will replace this route next.
-            "high_risk": "tools",
+            "high_risk": "approval",
         },
     )
 
     # -----------------------------------------------------
-    # Tool result
+    # Human approval
+    # -----------------------------------------------------
+
+    builder.add_conditional_edges(
+        "approval",
+        route_after_approval,
+        {
+            "execute": "tools",
+            "reject": "rejection",
+        },
+    )
+
+    builder.add_edge(
+        "rejection",
+        END,
+    )
+
+    # -----------------------------------------------------
+    # Tool execution
     # -----------------------------------------------------
 
     builder.add_edge(
@@ -324,7 +399,15 @@ def build_graph():
         "agent",
     )
 
-    return builder.compile()
+    # -----------------------------------------------------
+    # Checkpointing
+    # -----------------------------------------------------
+
+    checkpointer = InMemorySaver()
+
+    return builder.compile(
+        checkpointer=checkpointer,
+    )
 
 
 graph = build_graph()
