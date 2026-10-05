@@ -94,6 +94,10 @@ def planner_node(state: AgentState) -> dict:
         "current_step": 0,
         "tool_results": [],
         "error": None,
+        # Safety state
+        "pending_tool": None,
+        "pending_tool_args": None,
+        "risk_level": None,
     }
 
 
