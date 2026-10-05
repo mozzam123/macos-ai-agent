@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+
+load_dotenv()
 import threading
 
 from langchain_core.messages import HumanMessage

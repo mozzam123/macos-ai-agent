@@ -6,3 +6,6 @@ numpy
 scipy
 av<19
 pynput
+langsmith
+python-dotenv
+langchain-groq

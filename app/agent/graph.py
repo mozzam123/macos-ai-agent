@@ -4,6 +4,9 @@ from langchain_ollama import ChatOllama
 from app.config import OLLAMA_MODEL
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
+from langchain_groq import ChatGroq
+from app.config import GROQ_MODEL
+from app.agent.prompts import AGENT_PROMPT, PLANNER_PROMPT
 
 from app.agent.state import AgentState
 from app.tools.macos import (
@@ -50,8 +53,8 @@ tools = [
 # LLM
 # ---------------------------------------------------------
 
-llm = ChatOllama(
-    model=OLLAMA_MODEL,
+llm = ChatGroq(
+    model=GROQ_MODEL,
     temperature=0,
 )
 
@@ -78,26 +81,15 @@ planner_llm = llm.with_structured_output(ExecutionPlan)
 
 
 def planner_node(state: AgentState) -> dict:
-    """Create a high-level execution plan."""
+    """Create the execution plan."""
 
     user_request = state["messages"][0].content
 
-    plan = planner_llm.invoke(
-        f"""
-You are planning actions for a macOS AI agent.
-
-Break the user's request into the smallest necessary ordered actions.
-
-Rules:
-- Do not invent actions.
-- Do not invent filesystem paths.
-- If a path is unknown, plan to find the directory or file first.
-- Preserve the user's requested order of operations.
-
-User request:
-{user_request}
-"""
+    prompt = PLANNER_PROMPT.format(
+        user_request=user_request,
     )
+
+    plan = planner_llm.invoke(prompt)
 
     return {
         "plan": plan.steps,
@@ -113,7 +105,7 @@ User request:
 
 
 def agent_node(state: AgentState) -> dict:
-    """Execute the plan using available tools."""
+    """Decide and execute the next action."""
 
     plan = state.get("plan", [])
     current_step = state.get("current_step", 0)
@@ -123,37 +115,11 @@ def agent_node(state: AgentState) -> dict:
 
     results_text = "\n".join(f"- {result}" for result in tool_results)
 
-    system_message = f"""
-You are a local macOS AI agent.
-
-Complete the user's request using the available tools.
-
-Execution plan:
-
-{plan_text}
-
-Current execution step:
-{current_step + 1}
-
-Previous successful tool results:
-
-{results_text or "None"}
-
-IMPORTANT EXECUTION RULES:
-
-- Execute only ONE tool call at a time.
-- Never request multiple tools in the same response.
-- Wait for the result before deciding the next action.
-- Follow the execution plan in order.
-- Never invent filesystem paths.
-- If a path is unknown, use a discovery tool.
-- Use exact paths returned by tools.
-- Do not repeat actions that already succeeded.
-- Do not claim success unless the tool succeeded.
-
-If all required actions are complete, return the final response
-without calling another tool.
-"""
+    system_message = AGENT_PROMPT.format(
+        plan=plan_text,
+        current_step=current_step + 1,
+        tool_results=results_text or "None",
+    )
 
     response = llm_with_tools.invoke(
         [
@@ -166,7 +132,7 @@ without calling another tool.
 
 
 def track_tool_result(state: AgentState) -> dict:
-    """Record the result of the latest tool execution."""
+    """Store the latest successful tool result."""
 
     last_message = state["messages"][-1]
 
@@ -184,12 +150,12 @@ def track_tool_result(state: AgentState) -> dict:
 
 
 # ---------------------------------------------------------
-# Conditional routing
+# Routing
 # ---------------------------------------------------------
 
 
 def should_continue(state: AgentState) -> str:
-    """Check whether the agent requested another tool."""
+    """Route to tools when the agent requests a tool."""
 
     last_message = state["messages"][-1]
 
@@ -200,16 +166,12 @@ def should_continue(state: AgentState) -> str:
 
 
 # ---------------------------------------------------------
-# Build LangGraph
+# Graph
 # ---------------------------------------------------------
 
 
 def build_graph():
     builder = StateGraph(AgentState)
-
-    # -------------------------
-    # Nodes
-    # -------------------------
 
     builder.add_node(
         "planner",
@@ -231,24 +193,16 @@ def build_graph():
         track_tool_result,
     )
 
-    # -------------------------
-    # Edges
-    # -------------------------
-
-    # 1. User request enters the planner
     builder.add_edge(
         START,
         "planner",
     )
 
-    # 2. Planner creates the plan,
-    #    then sends it to the agent
     builder.add_edge(
         "planner",
         "agent",
     )
 
-    # 3. Agent either calls a tool or finishes
     builder.add_conditional_edges(
         "agent",
         should_continue,
@@ -258,15 +212,11 @@ def build_graph():
         },
     )
 
-    # 4. After a tool executes,
-    #    record its result in AgentState
     builder.add_edge(
         "tools",
         "track_tool_result",
     )
 
-    # 5. Return to the agent so it can
-    #    determine the next action
     builder.add_edge(
         "track_tool_result",
         "agent",
