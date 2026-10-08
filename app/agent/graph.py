@@ -7,8 +7,8 @@ from app.config import GROQ_MODEL
 from app.agent.prompts import AGENT_PROMPT, PLANNER_PROMPT
 from app.safety.policy import RiskLevel, get_tool_risk
 from langgraph.types import interrupt
-from langgraph.checkpoint.memory import InMemorySaver
-
+import sqlite3
+from langgraph.checkpoint.sqlite import SqliteSaver
 from app.agent.state import AgentState
 from app.tools.macos import (
     open_application,
@@ -403,7 +403,12 @@ def build_graph():
     # Checkpointing
     # -----------------------------------------------------
 
-    checkpointer = InMemorySaver()
+    connection = sqlite3.connect(
+        "checkpoints.db",
+        check_same_thread=False,
+    )
+
+    checkpointer = SqliteSaver(connection)
 
     return builder.compile(
         checkpointer=checkpointer,

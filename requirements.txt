@@ -9,3 +9,4 @@ pynput
 langsmith
 python-dotenv
 langchain-groq
+langgraph-checkpoint-sqlite
