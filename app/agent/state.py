@@ -4,20 +4,21 @@ from langgraph.graph.message import add_messages
 
 
 class AgentState(TypedDict):
+    # Conversation
     messages: Annotated[list, add_messages]
 
     # Planning
     plan: list[str]
+    current_step: int
 
     # Execution
-    current_step: int
     tool_results: list[str]
+    execution_history: list[dict]
     error: str | None
     retry_count: int
     max_retries: int
-    execution_history: list[dict]
 
-    # Safety
+    # Safety / HITL
     pending_tool: str | None
     pending_tool_args: dict | None
     risk_level: str | None

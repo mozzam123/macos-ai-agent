@@ -286,6 +286,10 @@ def track_tool_result(state: AgentState) -> dict:
             "error": result,
             "retry_count": (state.get("retry_count", 0) + 1),
             "execution_history": history,
+            "pending_tool": None,
+            "pending_tool_args": None,
+            "risk_level": None,
+            "approved": None,
         }
 
     # Tool succeeded
@@ -310,6 +314,11 @@ def track_tool_result(state: AgentState) -> dict:
         "error": None,
         "retry_count": 0,
         "execution_history": history,
+        # Clear completed pending action
+        "pending_tool": None,
+        "pending_tool_args": None,
+        "risk_level": None,
+        "approved": None,
     }
 
 
