@@ -21,7 +21,7 @@ from app.tools.macos import (
     open_file,
     copy_file,
     move_file,
-    rename_file,
+    rename_path,
     create_file,
     open_in_cursor,
     initialize_git,
@@ -43,7 +43,7 @@ tools = [
     open_file,
     copy_file,
     move_file,
-    rename_file,
+    rename_path,
     create_file,
     open_in_cursor,
     initialize_git,
@@ -102,6 +102,7 @@ def planner_node(state: AgentState) -> dict:
         "pending_tool_args": None,
         "risk_level": None,
         "approved": None,
+        "approved_action": None,
     }
 
 
@@ -140,7 +141,7 @@ def agent_node(state: AgentState) -> dict:
 
 
 def safety_node(state: AgentState) -> dict:
-    """Inspect the requested tool and determine its risk level."""
+    """Inspect the requested tool and determine its risk."""
 
     last_message = state["messages"][-1]
 
@@ -151,7 +152,6 @@ def safety_node(state: AgentState) -> dict:
             "risk_level": None,
         }
 
-    # We intentionally allow only one tool call per agent turn.
     tool_call = last_message.tool_calls[0]
 
     tool_name = tool_call["name"]
@@ -169,7 +169,7 @@ def safety_node(state: AgentState) -> dict:
 
 
 def approval_node(state: AgentState) -> dict:
-    """Pause execution and request approval for a high-risk action."""
+    """Pause execution for a high-risk action."""
 
     tool_name = state.get("pending_tool")
     tool_args = state.get("pending_tool_args")
@@ -181,15 +181,23 @@ def approval_node(state: AgentState) -> dict:
             "tool": tool_name,
             "arguments": tool_args,
             "risk": risk_level,
-            "message": f"Approval required to execute '{tool_name}'.",
+            "message": (f"Approval required to execute " f"'{tool_name}'."),
         }
     )
 
     approved = bool(decision.get("approved", False))
 
-    return {
+    result = {
         "approved": approved,
     }
+
+    if approved:
+        result["approved_action"] = {
+            "tool": tool_name,
+            "args": tool_args,
+        }
+
+    return result
 
 
 def rejection_node(state: AgentState) -> dict:
@@ -247,14 +255,25 @@ def should_continue(state: AgentState) -> str:
 
 
 def route_after_safety(state: AgentState) -> str:
-    """Route based on the requested tool's risk level."""
+    """Route based on risk and previous approval."""
 
     risk = state.get("risk_level")
 
-    if risk == RiskLevel.HIGH.value:
-        return "high_risk"
+    if risk != RiskLevel.HIGH.value:
+        return "execute"
 
-    return "execute"
+    approved_action = state.get("approved_action")
+
+    current_action = {
+        "tool": state.get("pending_tool"),
+        "args": state.get("pending_tool_args"),
+    }
+
+    # Exact same action was already approved
+    if approved_action == current_action:
+        return "execute"
+
+    return "high_risk"
 
 
 def handle_tool_error(error: Exception) -> str:

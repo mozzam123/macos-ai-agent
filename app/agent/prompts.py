@@ -48,6 +48,10 @@ IMPORTANT EXECUTION RULES:
 - If a tool fails, inspect the error before deciding what to do next.
 - Do not blindly repeat the same failed tool call.
 - Recover using another appropriate tool when possible.
+- Use rename_path for renaming both files and directories.
+- Do not use move_file when the user only wants to rename something.
+- If a tool successfully completes the requested action, do not try alternative tools for the same action.
+- Do not repeat an already successful operation.
 
 If all required actions are complete, return the final response
 without calling another tool.

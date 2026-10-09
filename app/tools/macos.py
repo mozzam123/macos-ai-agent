@@ -246,9 +246,10 @@ def copy_file(source: str, destination: str) -> str:
 
 @tool
 def move_file(source: str, destination: str) -> str:
-    """Move an existing file to another directory or file path.
+    """Move a file or directory to another directory/location.
 
-    Use this when the user asks to move a file.
+    Do NOT use this for a simple rename.
+    Use rename_path when only the name needs to change.
     """
 
     source_path = Path(source.strip()).expanduser()
@@ -271,25 +272,34 @@ def move_file(source: str, destination: str) -> str:
 
 
 @tool
-def rename_file(file_path: str, new_name: str) -> str:
-    """Rename an existing file while keeping it in the same directory."""
+def rename_path(path: str, new_name: str) -> str:
+    """Rename an existing file or directory.
 
-    path = Path(file_path.strip()).expanduser()
+    Use this whenever the user asks to rename a file or folder.
 
-    if not path.is_file():
-        raise FileNotFoundError(f"File does not exist: {path}")
+    Do not use move_file for a simple rename.
+    Use move_file only when moving something to another directory.
+    """
+
+    if not path or not path.strip():
+        raise ValueError("Path cannot be empty.")
 
     if not new_name or not new_name.strip():
-        raise ValueError("New file name cannot be empty.")
+        raise ValueError("New name cannot be empty.")
 
-    new_path = path.with_name(new_name.strip())
+    source = Path(path.strip()).expanduser()
 
-    if new_path.exists():
-        raise FileExistsError(f"A file already exists with that name: {new_path}")
+    if not source.exists():
+        raise FileNotFoundError(f"Path does not exist: {source}")
 
-    path.rename(new_path)
+    destination = source.parent / new_name.strip()
 
-    return f"Renamed file to: {new_path}"
+    if destination.exists():
+        raise FileExistsError(f"Destination already exists: {destination}")
+
+    source.rename(destination)
+
+    return f"Renamed: {source} → {destination}"
 
 
 @tool

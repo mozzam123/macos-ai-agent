@@ -24,7 +24,7 @@ TOOL_RISK_LEVELS = {
     "initialize_git": RiskLevel.MEDIUM,
     # Existing data is modified
     "move_file": RiskLevel.HIGH,
-    "rename_file": RiskLevel.HIGH,
+    "rename_path": RiskLevel.HIGH,
 }
 
 

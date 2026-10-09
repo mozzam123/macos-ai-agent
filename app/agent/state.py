@@ -19,3 +19,4 @@ class AgentState(TypedDict):
     pending_tool_args: dict | None
     risk_level: str | None
     approved: bool | None
+    approved_action: dict | None
