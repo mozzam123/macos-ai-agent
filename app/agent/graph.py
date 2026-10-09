@@ -1,30 +1,34 @@
-from pydantic import BaseModel, Field
-from langchain_core.messages import ToolMessage
-from langgraph.graph import StateGraph, START, END
-from langgraph.prebuilt import ToolNode
-from langchain_groq import ChatGroq
-from app.config import GROQ_MODEL
-from app.agent.prompts import AGENT_PROMPT, PLANNER_PROMPT
-from app.safety.policy import RiskLevel, get_tool_risk
-from langgraph.types import interrupt
 import sqlite3
+
+from pydantic import BaseModel, Field
+
+from langchain_core.messages import ToolMessage
+from langchain_groq import ChatGroq
+
 from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.graph import END, START, StateGraph
+from langgraph.prebuilt import ToolNode
+from langgraph.types import interrupt
+
+from app.agent.prompts import AGENT_PROMPT, PLANNER_PROMPT
 from app.agent.state import AgentState
+from app.config import GROQ_MODEL
+from app.safety.policy import RiskLevel, get_tool_risk
 from app.tools.macos import (
-    open_application,
-    open_folder,
-    open_url,
-    get_running_applications,
-    create_folder,
-    find_file,
-    find_directory,
-    open_file,
     copy_file,
-    move_file,
-    rename_path,
     create_file,
-    open_in_cursor,
+    create_folder,
+    find_directory,
+    find_file,
+    get_running_applications,
     initialize_git,
+    move_file,
+    open_application,
+    open_file,
+    open_folder,
+    open_in_cursor,
+    open_url,
+    rename_path,
 )
 
 
@@ -63,7 +67,7 @@ llm_with_tools = llm.bind_tools(tools)
 
 
 # ---------------------------------------------------------
-# Planner output
+# Planner Schema
 # ---------------------------------------------------------
 
 
@@ -97,6 +101,9 @@ def planner_node(state: AgentState) -> dict:
         "current_step": 0,
         "tool_results": [],
         "error": None,
+        # Retry state
+        "retry_count": 0,
+        "max_retries": 2,
         # Safety state
         "pending_tool": None,
         "pending_tool_args": None,
@@ -112,7 +119,7 @@ def planner_node(state: AgentState) -> dict:
 
 
 def agent_node(state: AgentState) -> dict:
-    """Decide and execute the next action."""
+    """Decide the next action."""
 
     plan = state.get("plan", [])
     current_step = state.get("current_step", 0)
@@ -140,6 +147,11 @@ def agent_node(state: AgentState) -> dict:
     return {"messages": [response]}
 
 
+# ---------------------------------------------------------
+# Safety Node
+# ---------------------------------------------------------
+
+
 def safety_node(state: AgentState) -> dict:
     """Inspect the requested tool and determine its risk."""
 
@@ -152,6 +164,7 @@ def safety_node(state: AgentState) -> dict:
             "risk_level": None,
         }
 
+    # Only one tool call is allowed per agent turn.
     tool_call = last_message.tool_calls[0]
 
     tool_name = tool_call["name"]
@@ -166,6 +179,11 @@ def safety_node(state: AgentState) -> dict:
         "pending_tool_args": tool_args,
         "risk_level": risk.value,
     }
+
+
+# ---------------------------------------------------------
+# Approval Node
+# ---------------------------------------------------------
 
 
 def approval_node(state: AgentState) -> dict:
@@ -200,13 +218,18 @@ def approval_node(state: AgentState) -> dict:
     return result
 
 
+# ---------------------------------------------------------
+# Rejection Node
+# ---------------------------------------------------------
+
+
 def rejection_node(state: AgentState) -> dict:
     """Record that the user rejected the action."""
 
     tool_name = state.get("pending_tool")
 
     return {
-        "error": f"User rejected tool execution: {tool_name}",
+        "error": (f"User rejected tool execution: " f"{tool_name}"),
         "pending_tool": None,
         "pending_tool_args": None,
         "risk_level": None,
@@ -214,18 +237,26 @@ def rejection_node(state: AgentState) -> dict:
     }
 
 
+# ---------------------------------------------------------
+# Tool Result Tracking
+# ---------------------------------------------------------
+
+
 def track_tool_result(state: AgentState) -> dict:
-    """Track successful tool results and tool errors."""
+    """Track successful results and bounded failures."""
 
     last_message = state["messages"][-1]
+
     result = str(last_message.content)
 
-    # ToolNode marks handled failures with error status
+    # Tool failed
     if isinstance(last_message, ToolMessage) and last_message.status == "error":
         return {
             "error": result,
+            "retry_count": (state.get("retry_count", 0) + 1),
         }
 
+    # Tool succeeded
     tool_results = [
         *state.get("tool_results", []),
         result,
@@ -233,8 +264,29 @@ def track_tool_result(state: AgentState) -> dict:
 
     return {
         "tool_results": tool_results,
-        "current_step": state.get("current_step", 0) + 1,
+        "current_step": (state.get("current_step", 0) + 1),
         "error": None,
+        # Successful execution resets retries
+        "retry_count": 0,
+    }
+
+
+# ---------------------------------------------------------
+# Failure Node
+# ---------------------------------------------------------
+
+
+def failure_node(state: AgentState) -> dict:
+    """Stop after too many failed recovery attempts."""
+
+    error = state.get("error") or "Unknown tool error."
+
+    return {
+        "error": (
+            "Execution stopped after too many "
+            "failed recovery attempts. "
+            f"Last error: {error}"
+        )
     }
 
 
@@ -244,7 +296,7 @@ def track_tool_result(state: AgentState) -> dict:
 
 
 def should_continue(state: AgentState) -> str:
-    """Determine whether the agent wants to execute a tool."""
+    """Determine whether the agent requested a tool."""
 
     last_message = state["messages"][-1]
 
@@ -259,6 +311,7 @@ def route_after_safety(state: AgentState) -> str:
 
     risk = state.get("risk_level")
 
+    # Low / medium actions execute automatically.
     if risk != RiskLevel.HIGH.value:
         return "execute"
 
@@ -270,21 +323,11 @@ def route_after_safety(state: AgentState) -> str:
     }
 
     # Exact same action was already approved
+    # during this request.
     if approved_action == current_action:
         return "execute"
 
     return "high_risk"
-
-
-def handle_tool_error(error: Exception) -> str:
-    """Convert tool exceptions into information the agent can reason about."""
-
-    return (
-        "Tool execution failed.\n"
-        f"Error: {str(error)}\n"
-        "Review the error and decide the next appropriate action. "
-        "Do not repeat the same failing action without changing something."
-    )
 
 
 def route_after_approval(state: AgentState) -> str:
@@ -294,6 +337,52 @@ def route_after_approval(state: AgentState) -> str:
         return "execute"
 
     return "reject"
+
+
+def route_after_tool_result(
+    state: AgentState,
+) -> str:
+    """Continue recovery or stop after retry limit."""
+
+    retry_count = state.get(
+        "retry_count",
+        0,
+    )
+
+    max_retries = state.get(
+        "max_retries",
+        2,
+    )
+
+    # max_retries=2:
+    #
+    # failure 1 → recovery attempt
+    # failure 2 → recovery attempt
+    # failure 3 → stop
+    if retry_count > max_retries:
+        return "stop"
+
+    return "continue"
+
+
+# ---------------------------------------------------------
+# Tool Error Handler
+# ---------------------------------------------------------
+
+
+def handle_tool_error(
+    error: Exception,
+) -> str:
+    """Convert tool exceptions into agent-readable context."""
+
+    return (
+        "Tool execution failed.\n"
+        f"Error: {str(error)}\n"
+        "Review the error and decide the next "
+        "appropriate action. "
+        "Do not repeat the same failing action "
+        "without changing something."
+    )
 
 
 # ---------------------------------------------------------
@@ -346,8 +435,13 @@ def build_graph():
         track_tool_result,
     )
 
+    builder.add_node(
+        "failure",
+        failure_node,
+    )
+
     # -----------------------------------------------------
-    # Start
+    # START → Planner → Agent
     # -----------------------------------------------------
 
     builder.add_edge(
@@ -361,7 +455,7 @@ def build_graph():
     )
 
     # -----------------------------------------------------
-    # Agent → Safety
+    # Agent Routing
     # -----------------------------------------------------
 
     builder.add_conditional_edges(
@@ -374,7 +468,7 @@ def build_graph():
     )
 
     # -----------------------------------------------------
-    # Safety
+    # Safety Routing
     # -----------------------------------------------------
 
     builder.add_conditional_edges(
@@ -387,7 +481,7 @@ def build_graph():
     )
 
     # -----------------------------------------------------
-    # Human approval
+    # Human Approval
     # -----------------------------------------------------
 
     builder.add_conditional_edges(
@@ -405,7 +499,7 @@ def build_graph():
     )
 
     # -----------------------------------------------------
-    # Tool execution
+    # Tool Execution + Retry Routing
     # -----------------------------------------------------
 
     builder.add_edge(
@@ -413,13 +507,22 @@ def build_graph():
         "track_tool_result",
     )
 
-    builder.add_edge(
+    builder.add_conditional_edges(
         "track_tool_result",
-        "agent",
+        route_after_tool_result,
+        {
+            "continue": "agent",
+            "stop": "failure",
+        },
+    )
+
+    builder.add_edge(
+        "failure",
+        END,
     )
 
     # -----------------------------------------------------
-    # Checkpointing
+    # SQLite Checkpointing
     # -----------------------------------------------------
 
     connection = sqlite3.connect(

@@ -13,6 +13,8 @@ class AgentState(TypedDict):
     current_step: int
     tool_results: list[str]
     error: str | None
+    retry_count: int
+    max_retries: int
 
     # Safety
     pending_tool: str | None
