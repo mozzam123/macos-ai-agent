@@ -15,6 +15,7 @@ class AgentState(TypedDict):
     error: str | None
     retry_count: int
     max_retries: int
+    execution_history: list[dict]
 
     # Safety
     pending_tool: str | None

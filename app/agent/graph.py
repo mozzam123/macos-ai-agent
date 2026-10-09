@@ -104,6 +104,7 @@ def planner_node(state: AgentState) -> dict:
         # Retry state
         "retry_count": 0,
         "max_retries": 2,
+        "execution_history": [],
         # Safety state
         "pending_tool": None,
         "pending_tool_args": None,
@@ -227,9 +228,24 @@ def rejection_node(state: AgentState) -> dict:
     """Record that the user rejected the action."""
 
     tool_name = state.get("pending_tool")
+    tool_args = state.get("pending_tool_args")
+    risk_level = state.get("risk_level")
+
+    history = list(state.get("execution_history", []))
+
+    history.append(
+        {
+            "tool": tool_name,
+            "args": tool_args,
+            "risk": risk_level,
+            "status": "rejected",
+            "result": "User rejected the action.",
+        }
+    )
 
     return {
         "error": (f"User rejected tool execution: " f"{tool_name}"),
+        "execution_history": history,
         "pending_tool": None,
         "pending_tool_args": None,
         "risk_level": None,
@@ -243,20 +259,46 @@ def rejection_node(state: AgentState) -> dict:
 
 
 def track_tool_result(state: AgentState) -> dict:
-    """Track successful results and bounded failures."""
+    """Track tool results, failures, retries, and execution history."""
 
     last_message = state["messages"][-1]
-
     result = str(last_message.content)
+
+    tool_name = state.get("pending_tool")
+    tool_args = state.get("pending_tool_args")
+    risk_level = state.get("risk_level")
+
+    history = list(state.get("execution_history", []))
 
     # Tool failed
     if isinstance(last_message, ToolMessage) and last_message.status == "error":
+        history.append(
+            {
+                "tool": tool_name,
+                "args": tool_args,
+                "risk": risk_level,
+                "status": "error",
+                "result": result,
+            }
+        )
+
         return {
             "error": result,
             "retry_count": (state.get("retry_count", 0) + 1),
+            "execution_history": history,
         }
 
     # Tool succeeded
+    history.append(
+        {
+            "tool": tool_name,
+            "args": tool_args,
+            "risk": risk_level,
+            "status": "success",
+            "result": result,
+        }
+    )
+
     tool_results = [
         *state.get("tool_results", []),
         result,
@@ -266,8 +308,8 @@ def track_tool_result(state: AgentState) -> dict:
         "tool_results": tool_results,
         "current_step": (state.get("current_step", 0) + 1),
         "error": None,
-        # Successful execution resets retries
         "retry_count": 0,
+        "execution_history": history,
     }
 
 
