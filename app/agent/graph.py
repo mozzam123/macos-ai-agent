@@ -2,7 +2,7 @@ import sqlite3
 
 from pydantic import BaseModel, Field
 
-from langchain_core.messages import ToolMessage
+from langchain_core.messages import ToolMessage, HumanMessage
 from langchain_groq import ChatGroq
 
 from langgraph.checkpoint.sqlite import SqliteSaver
@@ -88,7 +88,11 @@ planner_llm = llm.with_structured_output(ExecutionPlan)
 def planner_node(state: AgentState) -> dict:
     """Create the execution plan."""
 
-    user_request = state["messages"][0].content
+    user_request = next(
+        message.content
+        for message in reversed(state["messages"])
+        if isinstance(message, HumanMessage)
+    )
 
     prompt = PLANNER_PROMPT.format(
         user_request=user_request,

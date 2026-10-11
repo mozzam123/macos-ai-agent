@@ -19,6 +19,8 @@ from app.voice.transcriber import transcribe_audio
 # Prevent multiple agent executions from running at the same time.
 agent_lock = threading.Lock()
 
+SESSION_THREAD_ID = str(uuid.uuid4())
+
 
 def run_agent() -> None:
     """Run one complete voice-agent interaction."""
@@ -51,14 +53,9 @@ def run_agent() -> None:
         # LangGraph configuration
         # -------------------------------------------------
 
-        # Every request gets its own LangGraph thread.
-        # The same thread_id must be used when resuming
-        # an interrupted graph.
-        thread_id = str(uuid.uuid4())
-
         config = {
             "configurable": {
-                "thread_id": thread_id,
+                "thread_id": SESSION_THREAD_ID,
             }
         }
 
