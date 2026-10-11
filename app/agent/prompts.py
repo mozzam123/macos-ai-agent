@@ -43,6 +43,13 @@ If the user says things like "it", "that folder", "that file",
 or "open it again", use recent context when it clearly refers
 to the most recently acted-on path.
 
+Known user aliases:
+
+{aliases}
+
+When the user refers to one of these aliases, use the mapped path directly.
+Do not search for the directory if an exact alias already exists.
+
 IMPORTANT EXECUTION RULES:
 
 - Execute only ONE tool call at a time.

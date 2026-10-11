@@ -11,6 +11,7 @@ from app.agent.prompts import AGENT_PROMPT, PLANNER_PROMPT
 from app.agent.state import AgentState
 from app.config import GROQ_MODEL
 from app.safety.policy import RiskLevel, get_tool_risk
+from app.memory.aliases import ALIASES
 from app.tools.macos import (
     copy_file,
     create_file,
@@ -135,6 +136,7 @@ def agent_node(state: AgentState) -> dict:
     plan_text = "\n".join(f"{index + 1}. {step}" for index, step in enumerate(plan))
 
     results_text = "\n".join(f"- {result}" for result in tool_results)
+    aliases_text = "\n".join(f"- {name} → {path}" for name, path in ALIASES.items())
 
     system_message = AGENT_PROMPT.format(
         plan=plan_text,
@@ -143,6 +145,7 @@ def agent_node(state: AgentState) -> dict:
         error=error or "None",
         recent_path=recent_path or "None",
         recent_tool=recent_tool or "None",
+        aliases=aliases_text or "None",
     )
 
     response = llm_with_tools.invoke(
