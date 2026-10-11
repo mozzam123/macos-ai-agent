@@ -26,6 +26,7 @@ TOOL_RISK_LEVELS = {
     "move_file": RiskLevel.HIGH,
     "rename_path": RiskLevel.HIGH,
     "remember_path_alias": RiskLevel.MEDIUM,
+    "forget_path_alias": RiskLevel.MEDIUM,
 }
 
 

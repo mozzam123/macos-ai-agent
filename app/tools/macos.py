@@ -3,7 +3,7 @@ import webbrowser
 from pathlib import Path
 import shutil
 from langchain_core.tools import tool
-from app.memory.aliases import save_alias
+from app.memory.aliases import save_alias, delete_alias
 
 
 @tool
@@ -471,3 +471,24 @@ def remember_path_alias(
     )
 
     return f"Remembered alias: " f"'{alias}' → {resolved_path}"
+
+
+@tool
+def forget_path_alias(
+    alias: str,
+) -> str:
+    """Forget a previously remembered filesystem alias.
+
+    Use this only when the user explicitly asks to forget,
+    remove, or delete a remembered path alias.
+    """
+
+    if not alias or not alias.strip():
+        raise ValueError("Alias cannot be empty.")
+
+    removed = delete_alias(alias)
+
+    if not removed:
+        return f"Alias '{alias}' was not found " "or is a built-in alias."
+
+    return f"Forgot alias: '{alias}'"

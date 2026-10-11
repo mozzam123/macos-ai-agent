@@ -78,3 +78,38 @@ def save_alias(
             indent=2,
         )
     )
+
+
+def delete_alias(alias: str) -> bool:
+    """Delete a user-defined alias.
+
+    Returns True if an alias was removed.
+    Default aliases cannot be deleted.
+    """
+
+    normalized = alias.strip().lower()
+
+    if normalized in DEFAULT_ALIASES:
+        return False
+
+    if not ALIASES_FILE.exists():
+        return False
+
+    try:
+        data = json.loads(ALIASES_FILE.read_text())
+    except (json.JSONDecodeError, OSError):
+        return False
+
+    if normalized not in data:
+        return False
+
+    del data[normalized]
+
+    ALIASES_FILE.write_text(
+        json.dumps(
+            data,
+            indent=2,
+        )
+    )
+
+    return True

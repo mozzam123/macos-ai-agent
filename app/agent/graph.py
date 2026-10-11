@@ -28,6 +28,7 @@ from app.tools.macos import (
     open_url,
     rename_path,
     remember_path_alias,
+    forget_path_alias,
 )
 
 
@@ -51,6 +52,7 @@ tools = [
     open_in_cursor,
     initialize_git,
     remember_path_alias,
+    forget_path_alias,
 ]
 
 
