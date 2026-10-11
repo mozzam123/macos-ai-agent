@@ -34,6 +34,15 @@ Current error:
 
 {error}
 
+Recent context:
+
+Recent path: {recent_path}
+Recent tool: {recent_tool}
+
+If the user says things like "it", "that folder", "that file",
+or "open it again", use recent context when it clearly refers
+to the most recently acted-on path.
+
 IMPORTANT EXECUTION RULES:
 
 - Execute only ONE tool call at a time.
@@ -55,4 +64,6 @@ IMPORTANT EXECUTION RULES:
 
 If all required actions are complete, return the final response
 without calling another tool.
+
+
 """

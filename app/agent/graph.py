@@ -111,6 +111,8 @@ def planner_node(state: AgentState) -> dict:
         "risk_level": None,
         "approved": None,
         "approved_action": None,
+        "recent_path": state.get("recent_path"),
+        "recent_tool": state.get("recent_tool"),
     }
 
 
@@ -126,6 +128,8 @@ def agent_node(state: AgentState) -> dict:
     current_step = state.get("current_step", 0)
     tool_results = state.get("tool_results", [])
     error = state.get("error")
+    recent_path = state.get("recent_path")
+    recent_tool = state.get("recent_tool")
 
     plan_text = "\n".join(f"{index + 1}. {step}" for index, step in enumerate(plan))
 
@@ -136,6 +140,8 @@ def agent_node(state: AgentState) -> dict:
         current_step=current_step + 1,
         tool_results=results_text or "None",
         error=error or "None",
+        recent_path=recent_path or "None",
+        recent_tool=recent_tool or "None",
     )
 
     response = llm_with_tools.invoke(
@@ -307,6 +313,18 @@ def track_tool_result(state: AgentState) -> dict:
         *state.get("tool_results", []),
         result,
     ]
+    recent_path = state.get("recent_path")
+    recent_tool = tool_name
+
+    if tool_args:
+        recent_path = (
+            tool_args.get("path")
+            or tool_args.get("file_path")
+            or tool_args.get("folder_path")
+            or tool_args.get("directory")
+            or tool_args.get("destination")
+            or recent_path
+        )
 
     return {
         "tool_results": tool_results,
@@ -314,11 +332,12 @@ def track_tool_result(state: AgentState) -> dict:
         "error": None,
         "retry_count": 0,
         "execution_history": history,
-        # Clear completed pending action
         "pending_tool": None,
         "pending_tool_args": None,
         "risk_level": None,
         "approved": None,
+        "recent_path": recent_path,
+        "recent_tool": recent_tool,
     }
 
 

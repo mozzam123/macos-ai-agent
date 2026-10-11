@@ -24,3 +24,7 @@ class AgentState(TypedDict):
     risk_level: str | None
     approved: bool | None
     approved_action: dict | None
+
+    # Context
+    recent_path: str | None
+    recent_tool: str | None
