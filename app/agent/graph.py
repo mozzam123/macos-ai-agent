@@ -1,15 +1,12 @@
 import sqlite3
-
 from pydantic import BaseModel, Field
-
 from langchain_core.messages import ToolMessage, HumanMessage
 from langchain_groq import ChatGroq
-
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 from langgraph.types import interrupt
-
+from pathlib import Path
 from app.agent.prompts import AGENT_PROMPT, PLANNER_PROMPT
 from app.agent.state import AgentState
 from app.config import GROQ_MODEL
@@ -263,6 +260,47 @@ def rejection_node(state: AgentState) -> dict:
     }
 
 
+def resolve_recent_path(
+    tool_name: str | None,
+    tool_args: dict | None,
+    previous_path: str | None,
+) -> str | None:
+    """Determine the most relevant filesystem path after a successful tool."""
+
+    if not tool_args:
+        return previous_path
+
+    # Rename keeps the same parent but changes the name.
+    if tool_name == "rename_path":
+        source = tool_args.get("path")
+        new_name = tool_args.get("new_name")
+
+        if source and new_name:
+            source_path = Path(source).expanduser()
+            return str(source_path.parent / new_name)
+
+    # Move results in the destination becoming the relevant path.
+    if tool_name == "move_file":
+        destination = tool_args.get("destination")
+
+        if destination:
+            return str(Path(destination).expanduser())
+
+    # Create/open/path-oriented tools
+    candidate = (
+        tool_args.get("path")
+        or tool_args.get("file_path")
+        or tool_args.get("folder_path")
+        or tool_args.get("directory")
+        or tool_args.get("destination")
+    )
+
+    if candidate:
+        return str(Path(candidate).expanduser())
+
+    return previous_path
+
+
 # ---------------------------------------------------------
 # Tool Result Tracking
 # ---------------------------------------------------------
@@ -317,7 +355,12 @@ def track_tool_result(state: AgentState) -> dict:
         *state.get("tool_results", []),
         result,
     ]
-    recent_path = state.get("recent_path")
+
+    recent_path = resolve_recent_path(
+        tool_name=tool_name,
+        tool_args=tool_args,
+        previous_path=state.get("recent_path"),
+    )
     recent_tool = tool_name
 
     if tool_args:
@@ -332,7 +375,7 @@ def track_tool_result(state: AgentState) -> dict:
 
     return {
         "tool_results": tool_results,
-        "current_step": (state.get("current_step", 0) + 1),
+        "current_step": state.get("current_step", 0) + 1,
         "error": None,
         "retry_count": 0,
         "execution_history": history,
