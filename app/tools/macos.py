@@ -3,6 +3,7 @@ import webbrowser
 from pathlib import Path
 import shutil
 from langchain_core.tools import tool
+from app.memory.aliases import save_alias
 
 
 @tool
@@ -437,3 +438,36 @@ def find_directory(
         return str(matches[0])
 
     return "\n".join(str(path) for path in matches[:10])
+
+
+@tool
+def remember_path_alias(
+    alias: str,
+    path: str,
+) -> str:
+    """Remember a user-defined name for a filesystem path.
+
+    Use this when the user explicitly asks to remember that
+    a phrase or nickname refers to a specific path.
+
+    Example:
+    'Remember that my projects folder means ~/Dev'
+    """
+
+    if not alias or not alias.strip():
+        raise ValueError("Alias cannot be empty.")
+
+    if not path or not path.strip():
+        raise ValueError("Path cannot be empty.")
+
+    resolved_path = Path(path.strip()).expanduser()
+
+    if not resolved_path.exists():
+        raise FileNotFoundError(f"Path does not exist: {resolved_path}")
+
+    save_alias(
+        alias=alias,
+        path=str(resolved_path),
+    )
+
+    return f"Remembered alias: " f"'{alias}' → {resolved_path}"

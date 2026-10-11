@@ -25,6 +25,7 @@ TOOL_RISK_LEVELS = {
     # Existing data is modified
     "move_file": RiskLevel.HIGH,
     "rename_path": RiskLevel.HIGH,
+    "remember_path_alias": RiskLevel.MEDIUM,
 }
 
 
