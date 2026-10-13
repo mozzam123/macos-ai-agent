@@ -28,3 +28,4 @@ class AgentState(TypedDict):
     # Context
     recent_path: str | None
     recent_tool: str | None
+    recent_actions: list[dict]

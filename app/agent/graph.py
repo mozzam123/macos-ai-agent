@@ -119,6 +119,7 @@ def planner_node(state: AgentState) -> dict:
         "approved_action": None,
         "recent_path": state.get("recent_path"),
         "recent_tool": state.get("recent_tool"),
+        "recent_actions": state.get("recent_actions", []),
     }
 
 
@@ -136,6 +137,10 @@ def agent_node(state: AgentState) -> dict:
     error = state.get("error")
     recent_path = state.get("recent_path")
     recent_tool = state.get("recent_tool")
+    recent_actions = state.get(
+        "recent_actions",
+        [],
+    )
 
     plan_text = "\n".join(f"{index + 1}. {step}" for index, step in enumerate(plan))
 
@@ -144,6 +149,11 @@ def agent_node(state: AgentState) -> dict:
     aliases = get_aliases()
     aliases_text = "\n".join(f"- {name} → {path}" for name, path in aliases.items())
 
+    recent_actions_text = "\n".join(
+        f"- {action.get('tool')}: " f"{action.get('path') or action.get('result')}"
+        for action in recent_actions[-5:]
+    )
+
     system_message = AGENT_PROMPT.format(
         plan=plan_text,
         current_step=current_step + 1,
@@ -151,6 +161,7 @@ def agent_node(state: AgentState) -> dict:
         error=error or "None",
         recent_path=recent_path or "None",
         recent_tool=recent_tool or "None",
+        recent_actions=recent_actions_text or "None",
         aliases=aliases_text or "None",
     )
 
@@ -371,6 +382,19 @@ def track_tool_result(state: AgentState) -> dict:
         previous_path=state.get("recent_path"),
     )
     recent_tool = tool_name
+    recent_actions = list(state.get("recent_actions", []))
+
+    recent_actions.append(
+        {
+            "tool": tool_name,
+            "path": recent_path,
+            "args": tool_args,
+            "result": result,
+        }
+    )
+
+    # Keep only the latest 10 actions
+    recent_actions = recent_actions[-10:]
 
     if tool_args:
         recent_path = (
@@ -394,6 +418,7 @@ def track_tool_result(state: AgentState) -> dict:
         "approved": None,
         "recent_path": recent_path,
         "recent_tool": recent_tool,
+        "recent_actions": recent_actions,
     }
 
 

@@ -50,6 +50,20 @@ Known user aliases:
 When the user refers to one of these aliases, use the mapped path directly.
 Do not search for the directory if an exact alias already exists.
 
+Recent successful actions:
+
+{recent_actions}
+
+Use recent actions when the user refers to something indirectly,
+for example:
+- "the folder I just created"
+- "the last file"
+- "the project I opened earlier"
+- "open it again"
+
+Prefer the most recent matching action.
+Do not invent a path if recent context does not clearly identify one.
+
 IMPORTANT EXECUTION RULES:
 
 - Execute only ONE tool call at a time.
