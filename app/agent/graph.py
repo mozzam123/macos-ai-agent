@@ -12,11 +12,12 @@ from app.agent.state import AgentState
 from app.config import GROQ_MODEL
 from app.safety.policy import RiskLevel, get_tool_risk
 from app.memory.aliases import get_aliases
-from app.memory.recent import load_recent_actions, save_recent_actions
+from app.memory.recent import load_recent_actions, should_persist_action, save_recent_actions
 from app.tools.macos import (
     copy_file,
     create_file,
     create_folder,
+    clear_recent_action_memory,
     find_directory,
     find_file,
     get_running_applications,
@@ -43,6 +44,7 @@ tools = [
     open_url,
     get_running_applications,
     create_folder,
+    clear_recent_action_memory,
     find_file,
     find_directory,
     open_file,
@@ -104,7 +106,7 @@ def planner_node(state: AgentState) -> dict:
     plan = planner_llm.invoke(prompt)
     recent_actions = state.get("recent_actions")
 
-    if not recent_actions:
+    if recent_actions is None:
         recent_actions = load_recent_actions()
 
     return {
@@ -381,6 +383,22 @@ def track_tool_result(state: AgentState) -> dict:
         result,
     ]
 
+    if tool_name == "clear_recent_action_memory":
+        return {
+            "tool_results": tool_results,
+            "current_step": state.get("current_step", 0) + 1,
+            "error": None,
+            "retry_count": 0,
+            "execution_history": history,
+            "pending_tool": None,
+            "pending_tool_args": None,
+            "risk_level": None,
+            "approved": None,
+            "recent_path": None,
+            "recent_tool": None,
+            "recent_actions": [],
+        }
+
     recent_path = resolve_recent_path(
         tool_name=tool_name,
         tool_args=tool_args,
@@ -389,19 +407,17 @@ def track_tool_result(state: AgentState) -> dict:
     recent_tool = tool_name
     recent_actions = list(state.get("recent_actions", []))
 
-    recent_actions.append(
-        {
-            "tool": tool_name,
-            "path": recent_path,
-            "args": tool_args,
-            "result": result,
-        }
-    )
+    action = {
+        "tool": tool_name,
+        "path": recent_path,
+        "args": tool_args,
+        "result": result,
+    }
 
-    # Keep only the latest 10 actions
-    recent_actions = recent_actions[-10:]
-
-    save_recent_actions(recent_actions)
+    if should_persist_action(action):
+        recent_actions.append(action)
+        recent_actions = recent_actions[-10:]
+        save_recent_actions(recent_actions)
 
     if tool_args:
         recent_path = (

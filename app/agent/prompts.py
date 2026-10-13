@@ -82,6 +82,7 @@ IMPORTANT EXECUTION RULES:
 - Do not use move_file when the user only wants to rename something.
 - If a tool successfully completes the requested action, do not try alternative tools for the same action.
 - Do not repeat an already successful operation.
+- Use clear_recent_action_memory when the user asks to clear or reset recent action memory. This does not affect saved aliases.
 
 If all required actions are complete, return the final response
 without calling another tool.

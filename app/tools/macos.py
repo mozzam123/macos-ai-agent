@@ -4,6 +4,7 @@ from pathlib import Path
 import shutil
 from langchain_core.tools import tool
 from app.memory.aliases import save_alias, delete_alias
+from app.memory.recent import clear_recent_actions
 
 
 @tool
@@ -492,3 +493,16 @@ def forget_path_alias(
         return f"Alias '{alias}' was not found " "or is a built-in alias."
 
     return f"Forgot alias: '{alias}'"
+
+
+@tool
+def clear_recent_action_memory() -> str:
+    """Clear remembered recent actions without changing saved path aliases.
+
+    Use this when the user asks to clear, forget, or reset recent
+    action memory, recent history, or recently used paths.
+    """
+
+    clear_recent_actions()
+
+    return "Cleared recent-action memory. Saved path aliases are unchanged."

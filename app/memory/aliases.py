@@ -1,7 +1,4 @@
 import json
-from pathlib import Path
-
-
 ALIASES_FILE = Path("aliases.json")
 
 
@@ -35,25 +32,6 @@ def get_aliases() -> dict[str, str]:
 
     return _load_aliases()
 
-
-def resolve_alias(
-    value: str,
-) -> str | None:
-    """Resolve a known alias to an absolute path."""
-
-    if not value:
-        return None
-
-    aliases = _load_aliases()
-
-    normalized = value.strip().lower()
-
-    path = aliases.get(normalized)
-
-    if not path:
-        return None
-
-    return str(Path(path).expanduser())
 
 
 def save_alias(
