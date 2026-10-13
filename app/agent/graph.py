@@ -12,6 +12,7 @@ from app.agent.state import AgentState
 from app.config import GROQ_MODEL
 from app.safety.policy import RiskLevel, get_tool_risk
 from app.memory.aliases import get_aliases
+from app.memory.recent import load_recent_actions, save_recent_actions
 from app.tools.macos import (
     copy_file,
     create_file,
@@ -101,6 +102,10 @@ def planner_node(state: AgentState) -> dict:
     )
 
     plan = planner_llm.invoke(prompt)
+    recent_actions = state.get("recent_actions")
+
+    if not recent_actions:
+        recent_actions = load_recent_actions()
 
     return {
         "plan": plan.steps,
@@ -119,7 +124,7 @@ def planner_node(state: AgentState) -> dict:
         "approved_action": None,
         "recent_path": state.get("recent_path"),
         "recent_tool": state.get("recent_tool"),
-        "recent_actions": state.get("recent_actions", []),
+        "recent_actions": recent_actions,
     }
 
 
@@ -395,6 +400,8 @@ def track_tool_result(state: AgentState) -> dict:
 
     # Keep only the latest 10 actions
     recent_actions = recent_actions[-10:]
+
+    save_recent_actions(recent_actions)
 
     if tool_args:
         recent_path = (

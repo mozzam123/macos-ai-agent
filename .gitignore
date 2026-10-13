@@ -6,3 +6,4 @@ recording.wav
 .env
 checkpoints*
 aliases.json
+recent_memory.json
