@@ -1,5 +1,5 @@
 from pathlib import Path
-
+import threading
 import numpy as np
 import sounddevice as sd
 from scipy.io.wavfile import write
@@ -22,8 +22,9 @@ CHUNK_SIZE = int(SAMPLE_RATE * CHUNK_DURATION)
 
 
 def record_audio(
-    output_path: str | Path = RECORDING_FILE,
-) -> Path:
+    output_path: str = "recording.wav",
+    stop_event: threading.Event | None = None,
+) -> Path | None:
     """
     Record microphone audio.
 
@@ -55,6 +56,11 @@ def record_audio(
     ) as stream:
 
         for _ in range(max_chunks):
+
+            if stop_event and stop_event.is_set():
+                print("Recording cancelled.")
+                return None
+
             audio_chunk, overflowed = stream.read(CHUNK_SIZE)
 
             if overflowed:

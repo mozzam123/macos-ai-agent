@@ -40,11 +40,13 @@ class AssistantController(QObject):
 
         self._approval_decision = False
 
-    def activate(self) -> None:
-        """Start one assistant interaction."""
+        self._cancel_event = threading.Event()
 
+    def activate(self) -> None:
         if self._lock.locked():
             return
+
+        self._cancel_event.clear()
 
         thread = threading.Thread(
             target=self._run_agent,
@@ -73,7 +75,10 @@ class AssistantController(QObject):
                 "Speak now",
             )
 
-            audio_path = record_audio()
+            audio_path = record_audio(stop_event=self._cancel_event)
+
+            if self._cancel_event.is_set() or audio_path is None:
+                return
 
             self.status_changed.emit(
                 "Transcribing...",
@@ -81,6 +86,9 @@ class AssistantController(QObject):
             )
 
             user_request = transcribe_audio(audio_path)
+
+            if self._cancel_event.is_set():
+                return
 
             if not user_request:
                 self.error_occurred.emit("No speech detected.")
@@ -96,6 +104,9 @@ class AssistantController(QObject):
                     "thread_id": (SESSION_THREAD_ID),
                 }
             }
+
+            if self._cancel_event.is_set():
+                return
 
             result = graph.invoke(
                 {"messages": [HumanMessage(content=user_request)]},
@@ -115,6 +126,9 @@ class AssistantController(QObject):
                 # Worker thread pauses here.
                 # Qt UI remains fully responsive.
                 self._approval_event.wait()
+
+                if self._cancel_event.is_set():
+                    return
 
                 result = graph.invoke(
                     Command(resume={"approved": (self._approval_decision)}),
@@ -147,3 +161,12 @@ class AssistantController(QObject):
 
         finally:
             self._lock.release()
+
+    def cancel(self) -> None:
+        """Cancel the active assistant interaction."""
+
+        self._cancel_event.set()
+
+        # Also unblock approval if currently waiting.
+        self._approval_decision = False
+        self._approval_event.set()

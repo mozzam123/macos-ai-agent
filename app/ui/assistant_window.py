@@ -4,9 +4,11 @@ from PySide6.QtCore import (
     QPropertyAnimation,
     Qt,
     QTimer,
+    Signal,
 )
 from PySide6.QtGui import (
     QColor,
+    QKeyEvent,
     QPainter,
     QRadialGradient,
 )
@@ -273,6 +275,8 @@ class AssistantOrb(QWidget):
 class AssistantWindow(QWidget):
     """Floating macOS assistant window."""
 
+    cancel_requested = Signal()
+
     def __init__(self) -> None:
         super().__init__()
 
@@ -318,10 +322,22 @@ class AssistantWindow(QWidget):
         self.fade_out_animation.setEasingCurve(QEasingCurve.InOutQuad)
 
         self.fade_out_animation.finished.connect(self.hide)
+        self.setFocusPolicy(Qt.StrongFocus)
 
     # -----------------------------------------------------
     # UI
     # -----------------------------------------------------
+
+    def keyPressEvent(
+        self,
+        event: QKeyEvent,
+    ) -> None:
+        if event.key() == Qt.Key_Escape:
+            self.cancel_requested.emit()
+            self.fade_out()
+            return
+
+        super().keyPressEvent(event)
 
     def _build_ui(self) -> None:
         container = QFrame()
@@ -502,6 +518,7 @@ class AssistantWindow(QWidget):
             self.show()
             self.raise_()
             self.activateWindow()
+            self.setFocus()
 
             self.fade_in_animation.stop()
             self.fade_in_animation.start()

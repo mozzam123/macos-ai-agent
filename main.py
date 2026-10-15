@@ -13,8 +13,8 @@ def main() -> None:
 
     app.setQuitOnLastWindowClosed(False)
 
+    # Create UI and controller first
     window = AssistantWindow()
-
     controller = AssistantController()
 
     # -----------------------------------------
@@ -36,6 +36,12 @@ def main() -> None:
             )
         )
     )
+
+    # -----------------------------------------
+    # UI → Controller
+    # -----------------------------------------
+
+    window.cancel_requested.connect(controller.cancel)
 
     # -----------------------------------------
     # Global hotkey
