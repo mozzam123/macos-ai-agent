@@ -1,4 +1,5 @@
 venv/
+.venv/
 __pycache__/
 *.pyc
 .DS_Store
@@ -7,3 +8,5 @@ recording.wav
 checkpoints*
 aliases.json
 recent_memory.json
+build/
+dist/
