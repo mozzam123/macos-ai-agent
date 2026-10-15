@@ -8,6 +8,7 @@ av<19
 pynput
 langsmith
 python-dotenv
+groq
 langchain-groq
 langgraph-checkpoint-sqlite
 PySide6
