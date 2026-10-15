@@ -1,8 +1,5 @@
 import json
-from pathlib import Path
-
-
-RECENT_MEMORY_FILE = Path("recent_memory.json")
+from app.config import RECENT_MEMORY_FILE
 MAX_RECENT_ACTIONS = 10
 
 # Only actions that preserve useful filesystem context survive app restarts.

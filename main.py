@@ -1,10 +1,5 @@
 import sys
 
-from dotenv import load_dotenv
-
-# Environment must be loaded before graph imports.
-load_dotenv()
-
 from PySide6.QtWidgets import QApplication
 
 from app.config import HOTKEY

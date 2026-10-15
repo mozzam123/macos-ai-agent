@@ -6,6 +6,7 @@ from scipy.io.wavfile import write
 
 from app.config import (
     MAX_RECORDING_DURATION,
+    RECORDING_FILE,
     SAMPLE_RATE,
     SILENCE_DURATION,
     SILENCE_THRESHOLD,
@@ -21,7 +22,7 @@ CHUNK_SIZE = int(SAMPLE_RATE * CHUNK_DURATION)
 
 
 def record_audio(
-    output_path: str = "recording.wav",
+    output_path: str | Path = RECORDING_FILE,
 ) -> Path:
     """
     Record microphone audio.

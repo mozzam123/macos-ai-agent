@@ -1,7 +1,5 @@
 import json
-from pathlib import Path
-
-ALIASES_FILE = Path("aliases.json")
+from app.config import ALIASES_FILE
 
 
 DEFAULT_ALIASES = {

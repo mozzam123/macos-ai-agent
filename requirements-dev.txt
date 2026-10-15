@@ -1,0 +1,2 @@
+# Development-only dependencies used to produce the macOS application bundle.
+pyinstaller>=6.0
