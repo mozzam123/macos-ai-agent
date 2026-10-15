@@ -1,144 +1,60 @@
-import threading
-import uuid
+import sys
 
 from dotenv import load_dotenv
 
-# Load environment variables before importing the graph.
-# This enables LangSmith tracing configuration from .env.
+# Environment must be loaded before graph imports.
 load_dotenv()
 
-from langchain_core.messages import HumanMessage
-from langgraph.types import Command
+from PySide6.QtWidgets import QApplication
 
-from app.agent.graph import graph
-from app.hotkey import listen_for_hotkey
-from app.voice.recorder import record_audio
-from app.voice.transcriber import transcribe_audio
-
-
-# Prevent multiple agent executions from running at the same time.
-agent_lock = threading.Lock()
-
-SESSION_THREAD_ID = str(uuid.uuid4())
-
-
-def run_agent() -> None:
-    """Run one complete voice-agent interaction."""
-
-    # Do not start another request if the agent is already busy.
-    if not agent_lock.acquire(blocking=False):
-        print("Agent is already processing a command.")
-        return
-
-    try:
-        # -------------------------------------------------
-        # Voice input
-        # -------------------------------------------------
-
-        print("\nListening...")
-
-        audio_path = record_audio()
-
-        print("Transcribing...")
-
-        user_request = transcribe_audio(audio_path)
-
-        if not user_request:
-            print("No speech detected.")
-            return
-
-        print(f"You: {user_request}")
-
-        # -------------------------------------------------
-        # LangGraph configuration
-        # -------------------------------------------------
-
-        config = {
-            "configurable": {
-                "thread_id": SESSION_THREAD_ID,
-            }
-        }
-
-        # -------------------------------------------------
-        # Start agent
-        # -------------------------------------------------
-
-        print("Processing...")
-
-        result = graph.invoke(
-            {"messages": [HumanMessage(content=user_request)]},
-            config=config,
-        )
-
-        # -------------------------------------------------
-        # Human-in-the-loop approval
-        # -------------------------------------------------
-
-        while "__interrupt__" in result:
-            interrupt_data = result["__interrupt__"][0].value
-
-            print("\n--------------------------------")
-            print("Approval required")
-            print("--------------------------------")
-
-            print(f"Tool: {interrupt_data['tool']}")
-
-            print(f"Risk: {interrupt_data['risk']}")
-
-            print(f"Arguments: {interrupt_data['arguments']}")
-
-            print("--------------------------------")
-
-            answer = input("Allow this action? (y/n): ").strip().lower()
-
-            approved = answer in {
-                "y",
-                "yes",
-            }
-
-            # Resume the SAME LangGraph thread from
-            # the saved checkpoint.
-            result = graph.invoke(
-                Command(
-                    resume={
-                        "approved": approved,
-                    }
-                ),
-                config=config,
-            )
-
-        # -------------------------------------------------
-        # Final response
-        # -------------------------------------------------
-
-        messages = result.get("messages", [])
-
-        if messages:
-            final_message = messages[-1]
-
-            if final_message.content:
-                print(f"Agent: {final_message.content}")
-
-        # Show rejection/error if execution ended because
-        # the user rejected an action.
-        error = result.get("error")
-
-        if error:
-            print(f"Agent: {error}")
-
-    except Exception as exc:
-        print(f"Agent error: {exc}")
-
-    finally:
-        agent_lock.release()
-
-        print("\nReady for next command.")
+from app.config import HOTKEY
+from app.hotkey import start_hotkey_listener
+from app.ui.assistant_window import AssistantWindow
+from app.ui.controller import AssistantController
 
 
 def main() -> None:
-    """Start the macOS AI agent."""
+    app = QApplication(sys.argv)
 
-    listen_for_hotkey(run_agent)
+    app.setQuitOnLastWindowClosed(False)
+
+    window = AssistantWindow()
+
+    controller = AssistantController()
+
+    # -----------------------------------------
+    # Controller → UI
+    # -----------------------------------------
+
+    controller.status_changed.connect(window.set_status)
+
+    controller.result_ready.connect(window.show_result)
+
+    controller.error_occurred.connect(window.show_error)
+
+    controller.approval_required.connect(
+        lambda tool, arguments: (
+            window.request_approval(
+                tool,
+                arguments,
+                controller.submit_approval,
+            )
+        )
+    )
+
+    # -----------------------------------------
+    # Global hotkey
+    # -----------------------------------------
+
+    hotkey_listener = start_hotkey_listener(controller.activate)
+
+    print(f"macOS AI Agent running in background. " f"Press {HOTKEY}.")
+
+    exit_code = app.exec()
+
+    hotkey_listener.stop()
+
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":

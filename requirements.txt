@@ -10,3 +10,4 @@ langsmith
 python-dotenv
 langchain-groq
 langgraph-checkpoint-sqlite
+PySide6

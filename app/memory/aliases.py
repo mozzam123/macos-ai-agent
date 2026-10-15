@@ -1,4 +1,6 @@
 import json
+from pathlib import Path
+
 ALIASES_FILE = Path("aliases.json")
 
 
@@ -31,7 +33,6 @@ def get_aliases() -> dict[str, str]:
     """Return all known aliases."""
 
     return _load_aliases()
-
 
 
 def save_alias(
