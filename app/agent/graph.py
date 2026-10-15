@@ -9,7 +9,7 @@ from langgraph.types import interrupt
 from pathlib import Path
 from app.agent.prompts import AGENT_PROMPT, PLANNER_PROMPT
 from app.agent.state import AgentState
-from app.config import GROQ_MODEL
+from app.config import CHECKPOINTS_FILE, GROQ_MODEL
 from app.safety.policy import RiskLevel, get_tool_risk
 from app.memory.aliases import get_aliases
 from app.memory.recent import load_recent_actions, should_persist_action, save_recent_actions
@@ -700,7 +700,7 @@ def build_graph():
     # -----------------------------------------------------
 
     connection = sqlite3.connect(
-        "checkpoints.db",
+        CHECKPOINTS_FILE,
         check_same_thread=False,
     )
 
