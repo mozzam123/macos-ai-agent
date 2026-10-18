@@ -22,7 +22,7 @@ CHUNK_SIZE = int(SAMPLE_RATE * CHUNK_DURATION)
 
 
 def record_audio(
-    output_path: str = "recording.wav",
+    output_path: str = str(RECORDING_FILE),
     stop_event: threading.Event | None = None,
 ) -> Path | None:
     """
