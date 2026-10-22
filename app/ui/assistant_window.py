@@ -33,7 +33,7 @@ class AssistantOrb(QWidget):
     def __init__(self) -> None:
         super().__init__()
 
-        self.setFixedSize(70, 70)
+        self.setFixedSize(50, 50)
 
         self._pulse = 0.0
 
@@ -120,7 +120,7 @@ class AssistantOrb(QWidget):
 
         base_radius = size * 0.28
 
-        pulse_radius = base_radius + self._pulse * 8
+        pulse_radius = base_radius + self._pulse * 6
 
         # ---------------------------------------------
         # State-specific appearance
@@ -191,7 +191,7 @@ class AssistantOrb(QWidget):
 
         glow = QRadialGradient(
             center,
-            pulse_radius + 15,
+            pulse_radius + 12,
         )
 
         glow.setColorAt(
@@ -220,8 +220,8 @@ class AssistantOrb(QWidget):
 
         painter.drawEllipse(
             center,
-            int(pulse_radius + 12),
-            int(pulse_radius + 12),
+            int(pulse_radius + 9),
+            int(pulse_radius + 9),
         )
 
         # ---------------------------------------------
@@ -287,8 +287,8 @@ class AssistantWindow(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground)
 
         self.setFixedSize(
-            460,
-            240,
+            340,
+            160,
         )
 
         self._build_ui()
@@ -347,13 +347,13 @@ class AssistantWindow(QWidget):
         layout = QVBoxLayout(container)
 
         layout.setContentsMargins(
-            26,
-            20,
-            26,
-            20,
+            16,
+            14,
+            16,
+            14,
         )
 
-        layout.setSpacing(8)
+        layout.setSpacing(6)
 
         # ---------------------------------------------
         # Orb
@@ -454,29 +454,29 @@ class AssistantWindow(QWidget):
         self.setStyleSheet(
             """
             #assistantContainer {
-                background-color: rgba(20, 20, 24, 238);
-                border-radius: 30px;
-                border: 1px solid rgba(255, 255, 255, 28);
+                background-color: rgba(20, 20, 24, 220);
+                border-radius: 16px;
+                border: 1px solid rgba(255, 255, 255, 20);
             }
 
             #statusLabel {
                 color: white;
-                font-size: 17px;
+                font-size: 14px;
                 font-weight: 600;
             }
 
             #textLabel {
                 color: rgba(255, 255, 255, 175);
-                font-size: 13px;
+                font-size: 11px;
             }
 
             QPushButton {
                 background-color: rgba(255, 255, 255, 28);
                 color: white;
                 border: none;
-                border-radius: 10px;
-                padding: 8px 20px;
-                font-size: 13px;
+                border-radius: 8px;
+                padding: 6px 14px;
+                font-size: 11px;
             }
 
             QPushButton:hover {
@@ -500,7 +500,7 @@ class AssistantWindow(QWidget):
 
         x = geometry.x() + (geometry.width() - self.width()) // 2
 
-        y = geometry.y() + 70
+        y = geometry.y() + 60
 
         self.move(
             x,
