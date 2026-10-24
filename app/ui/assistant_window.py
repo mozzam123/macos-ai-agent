@@ -569,18 +569,9 @@ class AssistantWindow(QWidget):
         self,
         text: str,
     ) -> None:
-        self.status_label.setText("Done")
-
-        self.text_label.setText(text)
-
-        self.orb.set_state("done")
-
-        self.show_centered()
-
-        QTimer.singleShot(
-            2500,
-            self.fade_out,
-        )
+        # Operation completed; close the dialog silently instead of
+        # re-showing it with a result message, which is disturbing.
+        self.fade_out()
 
     # -----------------------------------------------------
     # Error
