@@ -77,7 +77,14 @@ class AssistantController(QObject):
 
             audio_path = record_audio(stop_event=self._cancel_event)
 
-            if self._cancel_event.is_set() or audio_path is None:
+            if self._cancel_event.is_set():
+                return
+
+            if audio_path is None:
+                # Startup grace period expired without speech.
+                # Return to idle silently instead of erroring on silence.
+                self.status_changed.emit("Ready", "")
+
                 return
 
             self.status_changed.emit(

@@ -29,6 +29,9 @@ if not ENV_FILE.exists():
     load_dotenv()
 
 MAX_RECORDING_DURATION = 15
+# Seconds to wait at the start of a turn for the user to begin speaking.
+# If no speech starts within this window, the interaction ends gracefully.
+STARTUP_GRACE_DURATION = 5
 SILENCE_DURATION = 1.2
 SILENCE_THRESHOLD = 500
 

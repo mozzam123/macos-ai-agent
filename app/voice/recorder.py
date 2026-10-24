@@ -10,6 +10,7 @@ from app.config import (
     SAMPLE_RATE,
     SILENCE_DURATION,
     SILENCE_THRESHOLD,
+    STARTUP_GRACE_DURATION,
 )
 
 
@@ -46,6 +47,10 @@ def record_audio(
 
     max_chunks = int(MAX_RECORDING_DURATION / CHUNK_DURATION)
 
+    # How many chunks we wait at the very start for speech to begin.
+    # Gives the user a few seconds to start speaking before the turn ends.
+    grace_chunks = int(STARTUP_GRACE_DURATION / CHUNK_DURATION)
+
     print("Listening...")
 
     with sd.InputStream(
@@ -55,7 +60,7 @@ def record_audio(
         blocksize=CHUNK_SIZE,
     ) as stream:
 
-        for _ in range(max_chunks):
+        for chunk_index in range(max_chunks):
 
             if stop_event and stop_event.is_set():
                 print("Recording cancelled.")
@@ -93,6 +98,18 @@ def record_audio(
                     print("Speech finished.")
 
                     break
+
+            # -------------------------------------------------
+            # Startup grace period: wait a few seconds at the
+            # start for the user to begin speaking. If nothing
+            # is said, end the turn gracefully instead of
+            # recording silence until MAX_RECORDING_DURATION.
+            # -------------------------------------------------
+
+            if not speech_started and (chunk_index + 1) >= grace_chunks:
+                print("Startup grace period expired without speech.")
+
+                return None
 
     if not frames:
         raise RuntimeError("No audio was recorded.")
