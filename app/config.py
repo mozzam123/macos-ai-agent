@@ -33,7 +33,12 @@ MAX_RECORDING_DURATION = 15
 # If no speech starts within this window, the interaction ends gracefully.
 STARTUP_GRACE_DURATION = 5
 SILENCE_DURATION = 1.2
-SILENCE_THRESHOLD = 200
+# Fixed voice-activity threshold on int16 RMS. 200 was too low: quiet room
+# noise (fan/AC) exceeds it, which resets the silence counter so recordings
+# never stop at SILENCE_DURATION and run to MAX_RECORDING_DURATION instead.
+# The recorder's 3-chunk stream warm-up already guards against missing the
+# first spoken chunk, so the threshold can stay conservative.
+SILENCE_THRESHOLD = 500
 
 WHISPER_MODEL = "whisper-large-v3"
 OLLAMA_MODEL = "qwen3:8b"
