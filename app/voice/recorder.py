@@ -60,6 +60,13 @@ def record_audio(
         blocksize=CHUNK_SIZE,
     ) as stream:
 
+        # Warm up the input stream: discard the first few chunks so the
+        # audio hardware buffer fills before we start measuring levels.
+        # Without this, the very first chunk(s) are often silence and speech
+        # spoken immediately after pressing the hotkey is missed.
+        for _ in range(3):
+            stream.read(CHUNK_SIZE)
+
         for chunk_index in range(max_chunks):
 
             if stop_event and stop_event.is_set():

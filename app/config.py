@@ -33,7 +33,7 @@ MAX_RECORDING_DURATION = 15
 # If no speech starts within this window, the interaction ends gracefully.
 STARTUP_GRACE_DURATION = 5
 SILENCE_DURATION = 1.2
-SILENCE_THRESHOLD = 500
+SILENCE_THRESHOLD = 200
 
 WHISPER_MODEL = "whisper-large-v3"
 OLLAMA_MODEL = "qwen3:8b"

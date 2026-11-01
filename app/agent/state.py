@@ -11,6 +11,12 @@ class AgentState(TypedDict):
     plan: list[str]
     current_step: int
 
+    # Skill
+    skill_name: str | None
+    skill_instructions: str | None
+    allowed_tools: list[str] | None
+    require_approval_for: list[str] | None
+
     # Execution
     tool_results: list[str]
     execution_history: list[dict]

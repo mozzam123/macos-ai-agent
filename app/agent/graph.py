@@ -13,6 +13,7 @@ from app.config import CHECKPOINTS_FILE, GROQ_MODEL
 from app.safety.policy import RiskLevel, get_tool_risk
 from app.memory.aliases import get_aliases
 from app.memory.recent import load_recent_actions, should_persist_action, save_recent_actions
+from app.skills.registry import SkillRegistry
 from app.tools.macos import (
     copy_file,
     create_file,
@@ -59,6 +60,12 @@ tools = [
 ]
 
 
+# Skill registry (auto-discovers skills/ at startup) and the set of every
+# registered tool name, used to resolve per-skill tool allowlists.
+registry = SkillRegistry()
+ALL_TOOL_NAMES = {tool.name for tool in tools}
+
+
 # ---------------------------------------------------------
 # LLM
 # ---------------------------------------------------------
@@ -67,8 +74,6 @@ llm = ChatGroq(
     model=GROQ_MODEL,
     temperature=0,
 )
-
-llm_with_tools = llm.bind_tools(tools)
 
 
 # ---------------------------------------------------------
@@ -79,6 +84,10 @@ llm_with_tools = llm.bind_tools(tools)
 class ExecutionPlan(BaseModel):
     steps: list[str] = Field(
         description="Ordered list of actions required to complete the request."
+    )
+    skill_name: str = Field(
+        default="general",
+        description="Name of the skill that best matches the request, or 'general'.",
     )
 
 
@@ -99,8 +108,11 @@ def planner_node(state: AgentState) -> dict:
         if isinstance(message, HumanMessage)
     )
 
+    available_skills = registry.catalogue_text()
+
     prompt = PLANNER_PROMPT.format(
         user_request=user_request,
+        available_skills=available_skills,
     )
 
     plan = planner_llm.invoke(prompt)
@@ -109,8 +121,15 @@ def planner_node(state: AgentState) -> dict:
     if recent_actions is None:
         recent_actions = load_recent_actions()
 
+    # Normalize and validate the selected skill.
+    skill_name = (plan.skill_name or "general").strip().lower()
+    valid_skills = {name for name, _ in registry.list_skills()} | {"general"}
+    if skill_name not in valid_skills:
+        skill_name = "general"
+
     return {
         "plan": plan.steps,
+        "skill_name": skill_name,
         "current_step": 0,
         "tool_results": [],
         "error": None,
@@ -127,6 +146,41 @@ def planner_node(state: AgentState) -> dict:
         "recent_path": state.get("recent_path"),
         "recent_tool": state.get("recent_tool"),
         "recent_actions": recent_actions,
+    }
+
+
+def load_skill_node(state: AgentState) -> dict:
+    """Load the selected skill's instructions and tool allowlist.
+
+    Deterministic node: no LLM call. Falls back to ``general`` (all tools, no
+    skill escalation) when the skill is unknown or not selected.
+    """
+
+    skill_name = (state.get("skill_name") or "general").strip().lower()
+
+    if skill_name == "general":
+        return {
+            "skill_name": "general",
+            "skill_instructions": "",
+            "allowed_tools": list(ALL_TOOL_NAMES),
+            "require_approval_for": [],
+        }
+
+    skill = registry.load_skill(skill_name)
+    if skill is None:
+        # Unknown skill: fall back to general behavior.
+        return {
+            "skill_name": "general",
+            "skill_instructions": "",
+            "allowed_tools": list(ALL_TOOL_NAMES),
+            "require_approval_for": [],
+        }
+
+    return {
+        "skill_name": skill.name,
+        "skill_instructions": skill.instructions,
+        "allowed_tools": skill.allowed_tools,
+        "require_approval_for": skill.require_approval_for,
     }
 
 
@@ -161,6 +215,16 @@ def agent_node(state: AgentState) -> dict:
         for action in recent_actions[-5:]
     )
 
+    skill_instructions = state.get("skill_instructions") or ""
+
+    allowed_tools = state.get("allowed_tools")
+    if allowed_tools:
+        skill_tools = [tool for tool in tools if tool.name in allowed_tools]
+    else:
+        skill_tools = tools
+
+    llm_with_tools = llm.bind_tools(skill_tools)
+
     system_message = AGENT_PROMPT.format(
         plan=plan_text,
         current_step=current_step + 1,
@@ -170,6 +234,7 @@ def agent_node(state: AgentState) -> dict:
         recent_tool=recent_tool or "None",
         recent_actions=recent_actions_text or "None",
         aliases=aliases_text or "None",
+        skill_instructions=skill_instructions or "None",
     )
 
     response = llm_with_tools.invoke(
@@ -188,7 +253,13 @@ def agent_node(state: AgentState) -> dict:
 
 
 def safety_node(state: AgentState) -> dict:
-    """Inspect the requested tool and determine its risk."""
+    """Inspect the requested tool and determine its risk.
+
+    Enforces the skill's tool allowlist (runtime layer) and computes whether
+    HITL approval is required: global HIGH risk or skill escalation. The
+    global safety policy is authoritative -- skills can only escalate, never
+    weaken it.
+    """
 
     last_message = state["messages"][-1]
 
@@ -197,6 +268,7 @@ def safety_node(state: AgentState) -> dict:
             "pending_tool": None,
             "pending_tool_args": None,
             "risk_level": None,
+            "requires_approval": None,
         }
 
     # Only one tool call is allowed per agent turn.
@@ -205,14 +277,34 @@ def safety_node(state: AgentState) -> dict:
     tool_name = tool_call["name"]
     tool_args = tool_call["args"]
 
+    allowed_tools = state.get("allowed_tools") or []
+    if allowed_tools and tool_name not in allowed_tools:
+        print(f"Safety check: {tool_name} " f"→ blocked (not allowed by skill)")
+        return {
+            "pending_tool": tool_name,
+            "pending_tool_args": tool_args,
+            "risk_level": "blocked",
+            "requires_approval": None,
+            "error": f"Tool '{tool_name}' is not allowed by the current skill.",
+        }
+
     risk = get_tool_risk(tool_name)
 
-    print(f"Safety check: {tool_name} " f"→ risk={risk.value}")
+    require_approval_for = state.get("require_approval_for") or []
+    requires_approval = (risk == RiskLevel.HIGH) or (
+        tool_name in require_approval_for
+    )
+
+    print(
+        f"Safety check: {tool_name} "
+        f"→ risk={risk.value} requires_approval={requires_approval}"
+    )
 
     return {
         "pending_tool": tool_name,
         "pending_tool_args": tool_args,
         "risk_level": risk.value,
+        "requires_approval": requires_approval,
     }
 
 
@@ -481,12 +573,17 @@ def should_continue(state: AgentState) -> str:
 
 
 def route_after_safety(state: AgentState) -> str:
-    """Route based on risk and previous approval."""
+    """Route based on risk, skill escalation, and previous approval."""
 
-    risk = state.get("risk_level")
+    # Tool not allowed by the current skill: return the error to the agent
+    # so it can recover or report to the user.
+    if state.get("risk_level") == "blocked":
+        return "agent"
 
-    # Low / medium actions execute automatically.
-    if risk != RiskLevel.HIGH.value:
+    requires_approval = state.get("requires_approval")
+
+    # Low / medium actions (and no skill escalation) execute automatically.
+    if not requires_approval:
         return "execute"
 
     approved_action = state.get("approved_action")
@@ -577,6 +674,11 @@ def build_graph():
     )
 
     builder.add_node(
+        "load_skill",
+        load_skill_node,
+    )
+
+    builder.add_node(
         "agent",
         agent_node,
     )
@@ -625,6 +727,11 @@ def build_graph():
 
     builder.add_edge(
         "planner",
+        "load_skill",
+    )
+
+    builder.add_edge(
+        "load_skill",
         "agent",
     )
 
@@ -651,6 +758,7 @@ def build_graph():
         {
             "execute": "tools",
             "high_risk": "approval",
+            "blocked": "agent",
         },
     )
 

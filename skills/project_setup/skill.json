@@ -1,0 +1,14 @@
+{
+  "name": "project_setup",
+  "description": "Set up a new software project.",
+  "allowed_tools": [
+    "find_directory",
+    "create_folder",
+    "open_in_cursor",
+    "initialize_git"
+  ],
+  "require_approval_for": [
+    "create_folder",
+    "initialize_git"
+  ]
+}

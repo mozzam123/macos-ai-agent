@@ -3,6 +3,13 @@ You are planning actions for a macOS AI agent.
 
 Break the user's request into the smallest necessary ordered actions.
 
+Available skills:
+
+{available_skills}
+
+Select the single best skill for the request and set skill_name accordingly.
+Use "general" when no specific skill matches.
+
 Rules:
 - Do not invent actions.
 - Do not invent filesystem paths.
@@ -18,6 +25,13 @@ AGENT_PROMPT = """
 You are a local macOS AI agent.
 
 Complete the user's request using the available tools.
+
+Current skill guidance:
+
+{skill_instructions}
+
+When a skill is active, follow its workflow and only use tools allowed by
+that skill. The global safety policy still applies.
 
 Execution plan:
 

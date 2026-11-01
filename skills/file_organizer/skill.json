@@ -1,0 +1,16 @@
+{
+  "name": "file_organizer",
+  "description": "Organize files and folders safely.",
+  "allowed_tools": [
+    "find_file",
+    "find_directory",
+    "create_folder",
+    "move_file",
+    "rename_path"
+  ],
+  "require_approval_for": [
+    "create_folder",
+    "move_file",
+    "rename_path"
+  ]
+}
